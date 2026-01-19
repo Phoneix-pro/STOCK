@@ -1,0 +1,110 @@
+
+table{
+  padding: 30px;
+}
+
+.table::-webkit-scrollbar {
+  width: 1px;
+  
+}
+.table::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+  min-height:30px;
+}
+
+.table::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
+ul{
+    display: flex;
+    justify-content: space-between;
+    padding: 40px;
+}
+li{
+    list-style: none;
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    font-size:larger;
+
+}
+.h1{
+    position: sticky;
+    top: 0;
+    padding: 10px;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    margin: 0;
+    font-family:Arial, Helvetica, sans-serif;
+    font-weight: 100;
+    text-align: center;
+    background:linear-gradient(135deg,rgb(8, 191, 97),rgb(122, 198, 23))
+}
+.btn{
+    margin-bottom:20px;
+    margin-left: 10px;
+    padding: 10px;
+    
+}
+.scanner{
+  padding: 90px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px 0 black;
+}
+.modal-dialog{
+max-width: 1500px;
+  
+}
+.scanner-container {
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.scanner-container video {
+  border-radius: 4px;
+}
+
+.quantity-selector input {
+  max-width: 150px;
+}
+
+.preview table {
+  font-size: 0.9rem;
+}
+
+.preview table th {
+  background-color: #e9ecef;
+}
+
+/* Ensure modal content is properly spaced */
+.modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+/* Add to Stocks.css */
+.bg-purple {
+  background-color: #6f42c1 !important;
+}
+
+.table-warning {
+  background-color: #fff3cd;
+}
+
+.badge.bg-secondary {
+  background-color: #6c757d !important;
+}
+
+.btn-group-sm .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Style for FIFO information */
+.small.text-muted {
+  font-size: 0.75rem;
+  color: #6c757d !important;
+}
+
+.text-info {
+  color: #0dcaf0 !important;
+}

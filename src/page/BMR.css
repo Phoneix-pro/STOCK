@@ -1,0 +1,75 @@
+.Header-part{
+    display: flex;
+    flex-direction: column;
+}
+.StatusP{
+    display: flex;
+    gap: 10px;
+    justify-content: end;
+}
+.StatusP {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.dot-status {
+  position: relative;
+  padding-left: 20px;
+}
+
+.dot-status::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 50%;
+}
+
+.dot-status.inprogress::before {
+  background-color: #ffcc00;
+}
+
+.dot-status.testing::before {
+  background-color: #007bff;
+}
+
+.dot-status.complete::before {
+  background-color: #28a745;
+}
+
+.ProductsB{
+    display: flex;
+    flex-direction: column;
+    margin-top: 50px;
+    width: 100%;
+}
+.inputB{
+ width: 300px;
+ display: flex;
+ height: 50px;
+ gap: 10px;
+ justify-content: center;
+}
+.inputB,input{
+height: 40px;
+border-radius: 10px ;
+}
+.Bbutton {
+   display: flex;
+   gap: 50px;
+}
+.CB{
+    display: flex;
+    margin-top: 30px;
+   
+}
+.v{
+  z-index:2000;
+}
+
+
+

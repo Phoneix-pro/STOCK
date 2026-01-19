@@ -1,0 +1,25 @@
+
+
+.card {
+  border-radius: 15px;
+  transition: 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.card-body {
+  text-align: center;
+  padding: 20px;
+}
+
+.text-muted {
+  font-weight: 500;
+}
+
+h2 {
+  font-family: "Poppins", sans-serif;
+  letter-spacing: 1px;
+}
