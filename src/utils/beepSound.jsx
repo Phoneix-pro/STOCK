@@ -11,8 +11,8 @@ export const playSimpleBeep = () => {
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    oscillator.frequency.value = 800; // Frequency in Hz
-    gainNode.gain.value = 1.0; // Volume
+    oscillator.frequency.value = 1500; // Frequency in Hz
+    gainNode.gain.value = 1.5; // Volume
     
     oscillator.start();
     

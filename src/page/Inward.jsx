@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import toast from "react-hot-toast"
 import { supabase } from '../supabaseClient'
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
-//import "./Inward.css"
+import "./Inward.css";
 
 function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, loadAllData }) {
     const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -24,7 +24,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
     const [editingInvoice, setEditingInvoice] = useState(null)
     const [searchTerm, setSearchTerm] = useState("")
     
-    // NEW: Testing completion modal state
+    // Testing completion modal state
     const [showTestingModal, setShowTestingModal] = useState(false)
     const [selectedItem, setSelectedItem] = useState(null)
     const [testingForm, setTestingForm] = useState({
@@ -130,19 +130,36 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         toast.success('Item duplicated successfully')
     }
 
-    // Update invoice item
+    // Update invoice item with decimal support
     const updateInvoiceItem = (index, field, value) => {
         const updatedItems = [...invoiceItems]
+        
+        // Handle decimal inputs for quantity and price fields
+        if (field === 'quantity' || field === 'price' || field === 'completed_qty') {
+            // Remove non-numeric characters except decimal point
+            let sanitizedValue = value.replace(/[^0-9.]/g, '')
+            // Ensure only one decimal point
+            const parts = sanitizedValue.split('.')
+            if (parts.length > 2) {
+                return
+            }
+            // Limit to 2 decimal places
+            if (parts[1] && parts[1].length > 2) {
+                sanitizedValue = parts[0] + '.' + parts[1].substring(0, 2)
+            }
+            value = sanitizedValue
+        }
+        
         updatedItems[index] = {
             ...updatedItems[index],
             [field]: value
         }
 
-        // Auto-calculate total price
+        // Auto-calculate total price with decimal support
         if (field === 'quantity' || field === 'price') {
-            const quantity = parseInt(updatedItems[index].quantity) || 0
+            const quantity = parseFloat(updatedItems[index].quantity) || 0
             const price = parseFloat(updatedItems[index].price) || 0
-            updatedItems[index].total_price = quantity * price
+            updatedItems[index].total_price = parseFloat((quantity * price).toFixed(2))
             
             // Set pending testing to quantity
             if (field === 'quantity') {
@@ -159,7 +176,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 updatedItems[index].product_name = product.name
                 updatedItems[index].part_no = product.PartNo
                 updatedItems[index].price = product.price
-                updatedItems[index].pending_testing = updatedItems[index].quantity || 1
+                updatedItems[index].pending_testing = parseFloat(updatedItems[index].quantity) || 1
             }
         }
 
@@ -185,7 +202,23 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         return invoiceItems.reduce((total, item) => total + (parseFloat(item.total_price) || 0), 0)
     }
 
-    // Save invoice to database
+    // Optimized function to load only inward data
+    const loadInwardDataOnly = async () => {
+        try {
+            const { data: invoicesData, error: invoicesError } = await supabase
+                .from('inward_invoices')
+                .select('*')
+                .order('created_at', { ascending: false })
+            
+            if (!invoicesError && invoicesData) {
+                setInwardInvoices(invoicesData)
+            }
+        } catch (error) {
+            console.error('Error loading inward invoices:', error)
+        }
+    }
+
+    // Save invoice to database with decimal support
     const saveInvoice = async () => {
         try {
             setLoadingStates(prev => ({ ...prev, saveInvoice: true }))
@@ -201,7 +234,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 return
             }
 
-            // Validate all items
+            // Validate all items with decimal support
             for (const item of invoiceItems) {
                 if (!item.bare_code.trim()) {
                     toast.error(`Item ${invoiceItems.indexOf(item) + 1}: Barcode is required!`)
@@ -215,7 +248,9 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     toast.error(`Item ${invoiceItems.indexOf(item) + 1}: Product Name is required!`)
                     return
                 }
-                if (!item.quantity || parseInt(item.quantity) <= 0) {
+                
+                const quantity = parseFloat(item.quantity)
+                if (isNaN(quantity) || quantity <= 0) {
                     toast.error(`Item ${invoiceItems.indexOf(item) + 1}: Valid Quantity is required!`)
                     return
                 }
@@ -245,6 +280,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 }
             }
 
+            // Calculate invoice total with decimal support
+            const invoiceTotal = invoiceItems.reduce((total, item) => {
+                return total + (parseFloat(item.total_price) || 0)
+            }, 0)
+
             // Start transaction - save invoice first
             let invoiceId
             if (editingInvoice) {
@@ -260,7 +300,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                         supplier_address: newInvoice.supplier_address,
                         phone_number: newInvoice.phone_number,
                         gst_number: newInvoice.gst_number,
-                        total_amount: calculateInvoiceTotal(),
+                        total_amount: parseFloat(invoiceTotal.toFixed(2)),
                         status: "draft",
                         notes: newInvoice.notes,
                         updated_at: new Date().toISOString()
@@ -301,7 +341,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                         supplier_address: newInvoice.supplier_address,
                         phone_number: newInvoice.phone_number,
                         gst_number: newInvoice.gst_number,
-                        total_amount: calculateInvoiceTotal(),
+                        total_amount: parseFloat(invoiceTotal.toFixed(2)),
                         status: "draft",
                         notes: newInvoice.notes
                     }])
@@ -311,7 +351,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 invoiceId = data[0].id
             }
 
-            // Process each item - UPSERT instead of delete/create
+            // Process each item with decimal support
             for (const item of invoiceItems) {
                 // Check if item already exists (for updates)
                 const { data: existingItem } = await supabase
@@ -321,6 +361,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     .eq('bare_code', item.bare_code.trim())
                     .maybeSingle()
 
+                const quantity = parseFloat(item.quantity) || 0
+                const price = parseFloat(item.price) || 0
+                const pendingTesting = parseFloat(item.pending_testing) || quantity
+                const completedTesting = parseFloat(item.completed_testing) || 0
+
                 const itemData = {
                     invoice_id: invoiceId,
                     bare_code: item.bare_code.trim(),
@@ -328,11 +373,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     product_name: item.product_name.trim(),
                     lot_no: item.lot_no.trim(),
                     serial_no: item.serial_no.trim(),
-                    quantity: parseInt(item.quantity) || 1,
-                    price: parseFloat(item.price) || 0,
-                    total_price: parseFloat(item.total_price) || 0,
-                    pending_testing: parseInt(item.pending_testing) || parseInt(item.quantity) || 0,
-                    completed_testing: parseInt(item.completed_testing) || 0,
+                    quantity: quantity,
+                    price: price,
+                    total_price: parseFloat((quantity * price).toFixed(2)),
+                    pending_testing: pendingTesting,
+                    completed_testing: completedTesting,
                     testing_status: item.testing_status || 'pending',
                     inspected_date: item.inspected_date,
                     inspected_by: item.inspected_by,
@@ -360,7 +405,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     .maybeSingle()
 
                 if (!existingVariant) {
-                    // Process stock variant creation
+                    // Process stock variant creation with decimal support
                     if (item.part_no.trim() && item.bare_code.trim()) {
                         // Check if stock exists with this part_no
                         const { data: existingStock, error: stockError } = await supabase
@@ -370,23 +415,23 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                             .single()
 
                         if (!stockError && existingStock) {
-                            // Update existing stock
-                            const newTotalReceived = (existingStock.total_received || 0) + (parseInt(item.quantity) || 0)
-                            const newTestingBalance = (existingStock.testing_balance || 0) + (parseInt(item.quantity) || 0)
+                            // Update existing stock with decimal support
+                            const newTotalReceived = (parseFloat(existingStock.total_received) || 0) + quantity
+                            const newTestingBalance = (parseFloat(existingStock.testing_balance) || 0) + quantity
                             
                             // Calculate weighted average price
-                            const totalExistingValue = (existingStock.quantity || 0) * (existingStock.average_price || 0)
-                            const newItemValue = (parseInt(item.quantity) || 0) * (parseFloat(item.price) || 0)
-                            const totalNewQuantity = (existingStock.quantity || 0) + (parseInt(item.quantity) || 0)
+                            const totalExistingValue = (parseFloat(existingStock.quantity) || 0) * (parseFloat(existingStock.average_price) || 0)
+                            const newItemValue = quantity * price
+                            const totalNewQuantity = (parseFloat(existingStock.quantity) || 0) + quantity
                             const newAveragePrice = totalNewQuantity > 0 ? 
                                 (totalExistingValue + newItemValue) / totalNewQuantity : 0
 
                             await supabase
                                 .from('stocks')
                                 .update({
-                                    total_received: newTotalReceived,
-                                    testing_balance: newTestingBalance,
-                                    average_price: newAveragePrice,
+                                    total_received: parseFloat(newTotalReceived.toFixed(2)),
+                                    testing_balance: parseFloat(newTestingBalance.toFixed(2)),
+                                    average_price: parseFloat(newAveragePrice.toFixed(2)),
                                     updated_at: new Date().toISOString()
                                 })
                                 .eq('id', existingStock.id)
@@ -401,9 +446,9 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     serial_no: item.serial_no.trim(),
                                     lot_no: item.lot_no.trim(),
                                     batch_no: item.lot_no || `BATCH-${Date.now()}`,
-                                    price: parseFloat(item.price) || 0,
+                                    price: price,
                                     quantity: 0,
-                                    pending_testing: parseInt(item.quantity) || 0,
+                                    pending_testing: quantity,
                                     received_date: newInvoice.received_date.toISOString().split('T')[0],
                                     testing_status: 'pending'
                                 }])
@@ -421,8 +466,8 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     .insert([{
                                         variant_id: newVariant?.id || existingVariant?.id,
                                         movement_type: 'in',
-                                        quantity: parseInt(item.quantity) || 0,
-                                        remaining_quantity: parseInt(item.quantity) || 0,
+                                        quantity: quantity,
+                                        remaining_quantity: quantity,
                                         reference_type: 'inward',
                                         reference_id: invoiceId,
                                         movement_date: new Date().toISOString()
@@ -430,19 +475,19 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                             }
 
                         } else {
-                            // Create new stock
+                            // Create new stock with decimal support
                             const { data: newStock, error: newStockError } = await supabase
                                 .from('stocks')
                                 .insert([{
                                     bare_code: item.bare_code.trim(),
                                     part_no: item.part_no.trim(),
                                     name: item.product_name.trim(),
-                                    price: parseFloat(item.price) || 0,
+                                    price: price,
                                     quantity: 0,
                                     using_quantity: 0,
-                                    total_received: parseInt(item.quantity) || 0,
-                                    testing_balance: parseInt(item.quantity) || 0,
-                                    average_price: parseFloat(item.price) || 0,
+                                    total_received: quantity,
+                                    testing_balance: quantity,
+                                    average_price: price,
                                     lot_no: item.lot_no,
                                     s_no: item.serial_no,
                                     testing_status: 'pending'
@@ -461,9 +506,9 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     serial_no: item.serial_no.trim(),
                                     lot_no: item.lot_no.trim(),
                                     batch_no: item.lot_no || `BATCH-${Date.now()}`,
-                                    price: parseFloat(item.price) || 0,
+                                    price: price,
                                     quantity: 0,
-                                    pending_testing: parseInt(item.quantity) || 0,
+                                    pending_testing: quantity,
                                     received_date: newInvoice.received_date.toISOString().split('T')[0],
                                     testing_status: 'pending'
                                 }])
@@ -480,8 +525,8 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 .insert([{
                                     variant_id: newVariant?.id || existingVariant?.id,
                                     movement_type: 'in',
-                                    quantity: parseInt(item.quantity) || 0,
-                                    remaining_quantity: parseInt(item.quantity) || 0,
+                                    quantity: quantity,
+                                    remaining_quantity: quantity,
                                     reference_type: 'inward',
                                     reference_id: invoiceId,
                                     movement_date: new Date().toISOString()
@@ -508,7 +553,8 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             setInvoiceItems([])
             setEditingInvoice(null)
             
-            await loadAllData()
+            // Reload only inward data
+            await loadInwardDataOnly()
         } catch (error) {
             console.error('Error saving invoice:', error)
             toast.error('Error saving invoice: ' + error.message)
@@ -517,7 +563,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         }
     }
 
-    // NEW: Open testing completion modal
+    // Open testing completion modal
     const openTestingModal = (item) => {
         setSelectedItem(item)
         setTestingForm({
@@ -528,7 +574,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         setShowTestingModal(true)
     }
 
-    // NEW: Close testing modal
+    // Close testing modal
     const closeTestingModal = () => {
         setShowTestingModal(false)
         setSelectedItem(null)
@@ -539,15 +585,15 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         })
     }
 
-    // FIXED: Update testing status for quantity - Optimized to not reload entire application
+    // Update testing status for quantity with decimal support
     const updateTestingQuantity = async () => {
         if (!selectedItem) return
 
         try {
             setLoadingStates(prev => ({ ...prev, updateTesting: true }))
 
-            const completedTesting = parseInt(testingForm.completed_qty) || 0
-            const pendingQty = selectedItem.pending_testing || selectedItem.quantity || 0
+            const completedTesting = parseFloat(testingForm.completed_qty) || 0
+            const pendingQty = parseFloat(selectedItem.pending_testing) || parseFloat(selectedItem.quantity) || 0
             
             if (completedTesting <= 0) {
                 toast.error("Please enter a valid completed quantity!")
@@ -555,12 +601,12 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             }
             
             if (completedTesting > pendingQty) {
-                toast.error(`Cannot complete more than ${pendingQty} items!`)
+                toast.error(`Cannot complete more than ${pendingQty.toFixed(2)} items!`)
                 return
             }
 
-            const newPending = pendingQty - completedTesting
-            const newCompleted = (selectedItem.completed_testing || 0) + completedTesting
+            const newPending = parseFloat((pendingQty - completedTesting).toFixed(2))
+            const newCompleted = (parseFloat(selectedItem.completed_testing) || 0) + completedTesting
             const newStatus = newPending === 0 ? 'completed' : 'pending'
 
             // Update inward item
@@ -586,16 +632,16 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 .single()
 
             if (!variantError && variant) {
-                // Update variant: move from pending_testing to quantity
-                const newVariantPending = Math.max(0, (variant.pending_testing || 0) - completedTesting)
-                const newVariantQty = (variant.quantity || 0) + completedTesting
+                // Update variant: move from pending_testing to quantity with decimal support
+                const newVariantPending = Math.max(0, (parseFloat(variant.pending_testing) || 0) - completedTesting)
+                const newVariantQty = (parseFloat(variant.quantity) || 0) + completedTesting
                 const newVariantStatus = newVariantPending === 0 ? 'completed' : 'pending'
 
                 await supabase
                     .from('stock_variants')
                     .update({
-                        quantity: newVariantQty,
-                        pending_testing: newVariantPending,
+                        quantity: parseFloat(newVariantQty.toFixed(2)),
+                        pending_testing: parseFloat(newVariantPending.toFixed(2)),
                         testing_status: newVariantStatus,
                         updated_at: new Date().toISOString()
                     })
@@ -608,7 +654,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                         variant_id: variant.id,
                         movement_type: 'out',
                         quantity: completedTesting,
-                        remaining_quantity: newVariantQty + newVariantPending,
+                        remaining_quantity: parseFloat((newVariantQty + newVariantPending).toFixed(2)),
                         reference_type: 'testing',
                         reference_id: selectedItem.invoice_id,
                         movement_date: new Date().toISOString()
@@ -622,22 +668,22 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     .single()
 
                 if (!stockError && stock) {
-                    // Update stock testing balance and quantity
-                    const newTestingBalance = Math.max(0, (stock.testing_balance || 0) - completedTesting)
-                    const newQuantity = (stock.quantity || 0) + completedTesting
+                    // Update stock testing balance and quantity with decimal support
+                    const newTestingBalance = Math.max(0, (parseFloat(stock.testing_balance) || 0) - completedTesting)
+                    const newQuantity = (parseFloat(stock.quantity) || 0) + completedTesting
 
                     await supabase
                         .from('stocks')
                         .update({
-                            testing_balance: newTestingBalance,
-                            quantity: newQuantity,
+                            testing_balance: parseFloat(newTestingBalance.toFixed(2)),
+                            quantity: parseFloat(newQuantity.toFixed(2)),
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', stock.id)
                 }
             }
 
-            toast.success(`Updated testing: ${completedTesting} completed, ${newPending} pending`)
+            toast.success(`Updated testing: ${completedTesting.toFixed(2)} completed, ${newPending.toFixed(2)} pending`)
             
             // Update local state without reloading entire application
             if (viewingInvoice) {
@@ -804,17 +850,17 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                             .single()
 
                         if (!stockError && stock) {
-                            const variantTotalQty = (variant.quantity || 0) + (variant.pending_testing || 0)
-                            const newTestingBalance = Math.max(0, (stock.testing_balance || 0) - variantTotalQty)
-                            const newTotalReceived = Math.max(0, (stock.total_received || 0) - variantTotalQty)
-                            const newQuantity = Math.max(0, (stock.quantity || 0) - (variant.quantity || 0))
+                            const variantTotalQty = (parseFloat(variant.quantity) || 0) + (parseFloat(variant.pending_testing) || 0)
+                            const newTestingBalance = Math.max(0, (parseFloat(stock.testing_balance) || 0) - variantTotalQty)
+                            const newTotalReceived = Math.max(0, (parseFloat(stock.total_received) || 0) - variantTotalQty)
+                            const newQuantity = Math.max(0, (parseFloat(stock.quantity) || 0) - (parseFloat(variant.quantity) || 0))
                             
                             await supabase
                                 .from('stocks')
                                 .update({
-                                    testing_balance: newTestingBalance,
-                                    total_received: newTotalReceived,
-                                    quantity: newQuantity,
+                                    testing_balance: parseFloat(newTestingBalance.toFixed(2)),
+                                    total_received: parseFloat(newTotalReceived.toFixed(2)),
+                                    quantity: parseFloat(newQuantity.toFixed(2)),
                                     updated_at: new Date().toISOString()
                                 })
                                 .eq('id', stock.id)
@@ -1246,21 +1292,24 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                                         </td>
                                                         <td>
                                                             <input
-                                                                type="number"
+                                                                type="text"
                                                                 className="form-control form-control-sm"
                                                                 value={item.quantity}
                                                                 onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)}
-                                                                min="1"
+                                                                pattern="[0-9]*\.?[0-9]{0,2}"
+                                                                title="Enter quantity (e.g., 2.5, 7.1)"
+                                                                placeholder="Quantity"
                                                             />
                                                         </td>
                                                         <td>
                                                             <input
-                                                                type="number"
+                                                                type="text"
                                                                 className="form-control form-control-sm"
                                                                 value={item.price}
                                                                 onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)}
-                                                                step="0.01"
-                                                                min="0"
+                                                                pattern="[0-9]*\.?[0-9]{0,2}"
+                                                                title="Enter price (e.g., 10.50, 7.00)"
+                                                                placeholder="Price"
                                                             />
                                                         </td>
                                                         <td>
@@ -1413,15 +1462,15 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                                     <td><code>{item.bare_code}</code></td>
                                                     <td>{item.part_no}</td>
                                                     <td>{item.product_name}</td>
-                                                    <td>{item.quantity}</td>
+                                                    <td>{parseFloat(item.quantity).toFixed(2)}</td>
                                                     <td>
                                                         <span className={`badge ${item.pending_testing > 0 ? 'bg-warning' : 'bg-secondary'}`}>
-                                                            {item.pending_testing || 0}
+                                                            {parseFloat(item.pending_testing || 0).toFixed(2)}
                                                         </span>
                                                     </td>
                                                     <td>
                                                         <span className={`badge ${item.completed_testing > 0 ? 'bg-success' : 'bg-secondary'}`}>
-                                                            {item.completed_testing || 0}
+                                                            {parseFloat(item.completed_testing || 0).toFixed(2)}
                                                         </span>
                                                     </td>
                                                     <td>
@@ -1536,7 +1585,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     <p className="mb-1"><strong>Part No:</strong> {selectedItem.part_no}</p>
                                     <p className="mb-0"><strong>Pending Testing:</strong> 
                                         <span className="badge bg-warning ms-2">
-                                            {selectedItem.pending_testing || 0}
+                                            {parseFloat(selectedItem.pending_testing || 0).toFixed(2)}
                                         </span>
                                     </p>
                                 </div>
@@ -1544,15 +1593,18 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 <div className="mb-3">
                                     <label className="form-label">
                                         <strong>Completed Quantity *</strong>
-                                        <small className="text-muted ms-1">(Max: {selectedItem.pending_testing || selectedItem.quantity || 0})</small>
+                                        <small className="text-muted ms-1">(Max: {parseFloat(selectedItem.pending_testing || selectedItem.quantity || 0).toFixed(2)})</small>
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         className="form-control"
                                         value={testingForm.completed_qty}
-                                        onChange={(e) => setTestingForm(prev => ({ ...prev, completed_qty: e.target.value }))}
-                                        min="1"
-                                        max={selectedItem.pending_testing || selectedItem.quantity || 0}
+                                        onChange={(e) => setTestingForm(prev => ({ 
+                                            ...prev, 
+                                            completed_qty: e.target.value.replace(/[^0-9.]/g, '')
+                                        }))}
+                                        pattern="[0-9]*\.?[0-9]{0,2}"
+                                        title="Enter quantity (e.g., 2.5)"
                                         placeholder="Enter completed quantity"
                                     />
                                 </div>

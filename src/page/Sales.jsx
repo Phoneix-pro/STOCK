@@ -41,6 +41,12 @@ function Sales({
     const [invoiceQuantities, setInvoiceQuantities] = useState({});
     const [dcItemQuantities, setDCItemQuantities] = useState({});
     const [invoiceItemQuantities, setInvoiceItemQuantities] = useState({});
+    const [loading, setLoading] = useState({
+        invoice: false,
+        dc: false,
+        delete: false,
+        moveBack: false
+    });
 
     useEffect(() => {
         loadInvoiceItems();
@@ -50,21 +56,23 @@ function Sales({
 
     const loadSalesWithDCInfo = async () => {
         try {
-            // Get all DC items grouped by variant_id
+            setLoading(prev => ({ ...prev, general: true }));
+
+            // Get all DC items grouped by variant_id with decimal support
             const { data: dcItemsData, error: dcError } = await supabase
                 .from('delivery_chalan_items')
                 .select('variant_id, quantity');
 
             if (dcError) throw dcError;
 
-            // Get all Invoice items grouped by variant_id
+            // Get all Invoice items grouped by variant_id with decimal support
             const { data: invoiceItemsData, error: invoiceError } = await supabase
                 .from('invoice_items')
                 .select('variant_id, quantity');
 
             if (invoiceError) throw invoiceError;
 
-            // Calculate total DC quantity per variant
+            // Calculate total DC quantity per variant with decimal support
             const dcQuantityMap = {};
             if (dcItemsData) {
                 dcItemsData.forEach(item => {
@@ -72,12 +80,12 @@ function Sales({
                     if (!dcQuantityMap[variantId]) {
                         dcQuantityMap[variantId] = 0;
                     }
-                    dcQuantityMap[variantId] += item.quantity;
+                    dcQuantityMap[variantId] += parseFloat(item.quantity) || 0;
                 });
             }
             setDcQuantities(dcQuantityMap);
 
-            // Calculate total Invoice quantity per variant
+            // Calculate total Invoice quantity per variant with decimal support
             const invoiceQuantityMap = {};
             if (invoiceItemsData) {
                 invoiceItemsData.forEach(item => {
@@ -85,7 +93,7 @@ function Sales({
                     if (!invoiceQuantityMap[variantId]) {
                         invoiceQuantityMap[variantId] = 0;
                     }
-                    invoiceQuantityMap[variantId] += item.quantity;
+                    invoiceQuantityMap[variantId] += parseFloat(item.quantity) || 0;
                 });
             }
             setInvoiceQuantities(invoiceQuantityMap);
@@ -96,10 +104,10 @@ function Sales({
                 const totalInvoiceQuantity = invoiceQuantityMap[variantId] || 0;
                 
                 // Available for DC = total sale quantity - already in DC
-                const availableForDC = Math.max(0, sale.moveQuantity - totalDCQuantity);
+                const availableForDC = Math.max(0, parseFloat(sale.moveQuantity) - totalDCQuantity);
                 
                 // Available for Invoice = total sale quantity - already in invoice
-                const availableForInvoice = Math.max(0, sale.moveQuantity - totalInvoiceQuantity);
+                const availableForInvoice = Math.max(0, parseFloat(sale.moveQuantity) - totalInvoiceQuantity);
                 
                 return {
                     ...sale,
@@ -107,10 +115,10 @@ function Sales({
                     invoiceQuantity: totalInvoiceQuantity,
                     remainingDCQuantity: availableForDC,
                     remainingInvoiceQuantity: availableForInvoice,
-                    isFullyInDC: totalDCQuantity >= sale.moveQuantity,
-                    isFullyInInvoice: totalInvoiceQuantity >= sale.moveQuantity,
-                    isPartiallyInDC: totalDCQuantity > 0 && totalDCQuantity < sale.moveQuantity,
-                    isPartiallyInInvoice: totalInvoiceQuantity > 0 && totalInvoiceQuantity < sale.moveQuantity
+                    isFullyInDC: totalDCQuantity >= parseFloat(sale.moveQuantity),
+                    isFullyInInvoice: totalInvoiceQuantity >= parseFloat(sale.moveQuantity),
+                    isPartiallyInDC: totalDCQuantity > 0 && totalDCQuantity < parseFloat(sale.moveQuantity),
+                    isPartiallyInInvoice: totalInvoiceQuantity > 0 && totalInvoiceQuantity < parseFloat(sale.moveQuantity)
                 };
             });
             
@@ -133,6 +141,9 @@ function Sales({
             setInvoiceItemQuantities(initialInvoiceQuantities);
         } catch (error) {
             console.error('Error loading sales with DC info:', error);
+            toast.error('Error loading sales data: ' + error.message);
+        } finally {
+            setLoading(prev => ({ ...prev, general: false }));
         }
     };
 
@@ -195,125 +206,121 @@ function Sales({
     };
 
     const deleteSale = async (saleId) => {
-        if (!window.confirm('Are you sure you want to delete this sale? This will move the quantity back to stock.')) return
+        if (!window.confirm('Are you sure you want to delete this sale?')) return
 
         try {
-            // First get the sale details
+            setLoading(prev => ({ ...prev, delete: true }));
+
+            // Get sale details to restore stock
             const { data: saleData, error: saleError } = await supabase
                 .from('sales')
-                .select('*')
+                .select(`
+                    *,
+                    stock_variants!inner (
+                        id,
+                        using_quantity
+                    )
+                `)
                 .eq('id', saleId)
                 .single();
 
             if (saleError) throw saleError;
 
-            // Get the variant details
-            const { data: variant, error: variantError } = await supabase
-                .from('stock_variants')
-                .select('*')
-                .eq('id', saleData.variant_id)
-                .single();
-
-            if (variantError) {
-                toast.error(`Variant not found!`);
-                return;
-            }
-
-            // Restore quantity to variant
-            const newVariantUsing = Math.max(0, (variant.using_quantity || 0) - saleData.move_quantity);
-            const newVariantQty = (variant.quantity || 0) + saleData.move_quantity;
+            // Restore variant quantity
+            const quantityToRestore = parseFloat(saleData.move_quantity) || 0;
+            const newVariantUsing = Math.max(0, parseFloat(saleData.stock_variants.using_quantity) - quantityToRestore);
 
             await supabase
                 .from('stock_variants')
                 .update({
                     using_quantity: newVariantUsing,
-                    quantity: newVariantQty,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', variant.id);
+                .eq('id', saleData.stock_variants.id);
 
-            // Record movement
-            await supabase
-                .from('stock_movements')
-                .insert([{
-                    variant_id: variant.id,
-                    movement_type: 'in',
-                    quantity: saleData.move_quantity,
-                    remaining_quantity: newVariantQty,
-                    reference_type: 'sales_return',
-                    movement_date: new Date().toISOString()
-                }]);
+            // Restore stock quantity
+            const { data: stock, error: stockError } = await supabase
+                .from('stocks')
+                .select('using_quantity')
+                .eq('id', saleData.stock_id)
+                .single();
 
-            // Update stock totals
-            const { data: allVariants, error: variantsError } = await supabase
-                .from('stock_variants')
-                .select('quantity, using_quantity, pending_testing, price')
-                .eq('stock_id', variant.stock_id);
-
-            if (!variantsError && allVariants) {
-                let totalQuantity = 0;
-                let totalUsingQuantity = 0;
-                let totalTestingBalance = 0;
-                let totalValue = 0;
-                let totalReceived = 0;
+            if (!stockError) {
+                const newStockUsing = Math.max(0, parseFloat(stock.using_quantity) - quantityToRestore);
                 
-                allVariants.forEach(v => {
-                    const qty = v.quantity || 0;
-                    const using = v.using_quantity || 0;
-                    const pending = v.pending_testing || 0;
-                    const price = v.price || 0;
-                    
-                    totalQuantity += qty;
-                    totalUsingQuantity += using;
-                    totalTestingBalance += pending;
-                    totalValue += (qty + using + pending) * price;
-                    totalReceived += qty + using + pending;
-                });
-
-                const averagePrice = totalReceived > 0 ? totalValue / totalReceived : 0;
-
                 await supabase
                     .from('stocks')
                     .update({
-                        quantity: totalQuantity,
-                        using_quantity: totalUsingQuantity,
-                        testing_balance: totalTestingBalance,
-                        total_received: totalReceived,
-                        average_price: averagePrice,
+                        using_quantity: newStockUsing,
                         updated_at: new Date().toISOString()
                     })
-                    .eq('id', variant.stock_id);
+                    .eq('id', saleData.stock_id);
             }
 
-            // Now delete the sale
-            const { error } = await supabase
+            // Delete the sale
+            const { error: deleteError } = await supabase
                 .from('sales')
                 .delete()
                 .eq('id', saleId)
 
-            if (error) throw error
+            if (deleteError) throw deleteError
 
-            toast.success('Sale deleted successfully! Quantity restored to stock.')
-            await loadAllData();
-            await loadSalesWithDCInfo();
+            toast.success('Sale deleted successfully! Stock quantities restored.')
+            
+            // Reload data
+            await Promise.all([
+                loadAllData(),
+                loadSalesWithDCInfo()
+            ]);
+            
         } catch (error) {
             toast.error('Error deleting sale: ' + error.message)
+        } finally {
+            setLoading(prev => ({ ...prev, delete: false }));
         }
     }
 
-    const handleMoveBackQuantityChange = (saleId, quantity) => {
-        const sale = sales.find(sale => sale.id === saleId);
-        const maxQuantity = sale.moveQuantity;
-        setMoveBackQuantity(prev => ({
-            ...prev,
-            [saleId]: Math.min(Math.max(1, quantity), maxQuantity)
-        }));
-    }
+    // Handle decimal quantity changes
+    const handleQuantityChange = (value, field, saleId, maxQuantity) => {
+        // Allow decimal values
+        const sanitizedValue = value.replace(/[^0-9.]/g, '');
+        const parts = sanitizedValue.split('.');
+        
+        if (parts.length > 2) return;
+        
+        // Limit to 2 decimal places
+        let finalValue = sanitizedValue;
+        if (parts[1] && parts[1].length > 2) {
+            finalValue = parts[0] + '.' + parts[1].substring(0, 2);
+        }
+        
+        const parsedValue = parseFloat(finalValue) || 0;
+        const clampedValue = Math.min(Math.max(0.01, parsedValue), parseFloat(maxQuantity));
+        
+        if (field === 'moveBack') {
+            setMoveBackQuantity(prev => ({
+                ...prev,
+                [saleId]: clampedValue
+            }));
+        } else if (field === 'invoice') {
+            setInvoiceItemQuantities(prev => ({
+                ...prev,
+                [saleId]: clampedValue
+            }));
+        } else if (field === 'dc') {
+            setDCItemQuantities(prev => ({
+                ...prev,
+                [saleId]: clampedValue
+            }));
+        }
+    };
 
     const moveSaleBackToStock = async (sale) => {
-        const quantityToMove = moveBackQuantity[sale.id] || sale.moveQuantity
+        const quantityToMove = parseFloat(moveBackQuantity[sale.id]) || parseFloat(sale.moveQuantity);
         
         try {
+            setLoading(prev => ({ ...prev, moveBack: true }));
+
             const { data: variant, error: variantError } = await supabase
                 .from('stock_variants')
                 .select('*')
@@ -325,8 +332,8 @@ function Sales({
                 return
             }
 
-            const newVariantUsing = Math.max(0, (variant.using_quantity || 0) - quantityToMove)
-            const newVariantQty = (variant.quantity || 0) + quantityToMove
+            const newVariantUsing = Math.max(0, parseFloat(variant.using_quantity) - quantityToMove)
+            const newVariantQty = parseFloat(variant.quantity) + quantityToMove
 
             await supabase
                 .from('stock_variants')
@@ -355,8 +362,8 @@ function Sales({
                 .single()
 
             if (!stockError) {
-                const newStockUsing = Math.max(0, (stock.using_quantity || 0) - quantityToMove)
-                const newStockQty = (stock.quantity || 0) + quantityToMove
+                const newStockUsing = Math.max(0, parseFloat(stock.using_quantity) - quantityToMove)
+                const newStockQty = parseFloat(stock.quantity) + quantityToMove
 
                 await supabase
                     .from('stocks')
@@ -368,7 +375,7 @@ function Sales({
                     .eq('id', variant.stock_id)
             }
 
-            if (quantityToMove === sale.moveQuantity) {
+            if (quantityToMove === parseFloat(sale.moveQuantity)) {
                 const { error: deleteError } = await supabase
                     .from('sales')
                     .delete()
@@ -379,24 +386,31 @@ function Sales({
                 const { error: updateSaleError } = await supabase
                     .from('sales')
                     .update({
-                        move_quantity: sale.moveQuantity - quantityToMove
+                        move_quantity: parseFloat(sale.moveQuantity) - quantityToMove
                     })
                     .eq('id', sale.id)
 
                 if (updateSaleError) throw updateSaleError
             }
 
-            toast.success(`Moved ${quantityToMove} ${sale.name} back to stock`)
+            toast.success(`Moved ${quantityToMove.toFixed(2)} ${sale.name} back to stock`)
             setMoveBackQuantity(prev => {
                 const newState = { ...prev }
                 delete newState[sale.id]
                 return newState
             })
             setSelectedSaleForMove(null)
-            await loadAllData();
-            await loadSalesWithDCInfo();
+            
+            // Reload data
+            await Promise.all([
+                loadAllData(),
+                loadSalesWithDCInfo()
+            ]);
+            
         } catch (error) {
             toast.error('Error moving back to stock: ' + error.message)
+        } finally {
+            setLoading(prev => ({ ...prev, moveBack: false }));
         }
     }
 
@@ -426,26 +440,7 @@ function Sales({
         }
     }
 
-    const handleInvoiceQuantityChange = (saleId, quantity) => {
-        const sale = salesWithDCInfo.find(s => s.id === saleId);
-        const maxQuantity = sale?.remainingInvoiceQuantity || 0;
-        
-        setInvoiceItemQuantities(prev => ({
-            ...prev,
-            [saleId]: Math.min(Math.max(1, quantity), maxQuantity)
-        }));
-    };
-
-    const handleDCQuantityChange = (saleId, quantity) => {
-        const sale = salesWithDCInfo.find(s => s.id === saleId);
-        const maxQuantity = sale?.remainingDCQuantity || 0;
-        
-        setDCItemQuantities(prev => ({
-            ...prev,
-            [saleId]: Math.min(Math.max(1, quantity), maxQuantity)
-        }));
-    };
-
+    // Create Invoice with decimal support
     const createInvoice = async () => {
         if (selectedSalesForInvoice.length === 0) {
             toast.error('Please select at least one sale item for invoice!');
@@ -458,6 +453,8 @@ function Sales({
         }
 
         try {
+            setLoading(prev => ({ ...prev, invoice: true }));
+
             // Check for duplicate invoice number
             const { data: existingInvoice, error: checkError } = await supabase
                 .from('invoices')
@@ -467,15 +464,18 @@ function Sales({
 
             if (existingInvoice && !checkError) {
                 toast.error('Invoice number already exists!');
+                setLoading(prev => ({ ...prev, invoice: false }));
                 return;
             }
 
             // Calculate total amount
             let totalAmount = 0;
             const invoiceItemsToInsert = [];
+            const stockUpdatePromises = [];
 
             for (const sale of selectedSalesForInvoice) {
-                const quantity = invoiceItemQuantities[sale.id] || sale.remainingInvoiceQuantity || sale.moveQuantity;
+                const saleInfo = salesWithDCInfo.find(s => s.id === sale.id);
+                const quantity = parseFloat(invoiceItemQuantities[sale.id]) || parseFloat(saleInfo?.remainingInvoiceQuantity || sale.moveQuantity);
                 
                 // Find variant by barcode to get actual price
                 const { data: variantData, error: variantError } = await supabase
@@ -486,10 +486,42 @@ function Sales({
 
                 if (!variantError && variantData) {
                     // Use variant price
-                    const variantPrice = variantData.price || sale.price || 0;
+                    const variantPrice = parseFloat(variantData.price) || parseFloat(sale.price) || 0;
                     const itemTotal = variantPrice * quantity;
                     totalAmount += itemTotal;
                     
+                    // Reduce variant using quantity
+                    const newVariantUsing = Math.max(0, parseFloat(variantData.using_quantity) - quantity);
+                    
+                    stockUpdatePromises.push(
+                        supabase
+                            .from('stock_variants')
+                            .update({
+                                using_quantity: newVariantUsing,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', variantData.id)
+                    );
+
+                    // Update stock quantities
+                    const { data: stock, error: stockError } = await supabase
+                        .from('stocks')
+                        .select('using_quantity, quantity')
+                        .eq('id', variantData.stock_id)
+                        .single();
+
+                    if (!stockError) {
+                        const newStockUsing = Math.max(0, parseFloat(stock.using_quantity) - quantity);
+                        
+                        await supabase
+                            .from('stocks')
+                            .update({
+                                using_quantity: newStockUsing,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', variantData.stock_id);
+                    }
+
                     // Add to invoice items
                     invoiceItemsToInsert.push({
                         invoice_id: null, // Will be set after invoice creation
@@ -503,6 +535,25 @@ function Sales({
                         total_price: itemTotal,
                         variant_price: variantPrice
                     });
+
+                    // Update or delete the sale record
+                    if (quantity === parseFloat(sale.moveQuantity)) {
+                        // Delete the sale if all quantity is invoiced
+                        await supabase
+                            .from('sales')
+                            .delete()
+                            .eq('id', sale.id);
+                    } else {
+                        // Update sale quantity if partial invoicing
+                        const newSaleQuantity = parseFloat(sale.moveQuantity) - quantity;
+                        await supabase
+                            .from('sales')
+                            .update({
+                                move_quantity: newSaleQuantity,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', sale.id);
+                    }
                 }
             }
 
@@ -538,6 +589,9 @@ function Sales({
                 if (itemsError) throw itemsError;
             }
 
+            // Wait for all stock updates
+            await Promise.all(stockUpdatePromises);
+
             toast.success(`Invoice ${invoiceForm.invoice_number} created successfully!`);
             
             // Reset form and selections
@@ -551,9 +605,11 @@ function Sales({
             setShowInvoiceModal(false);
             
             // Reload all data
-            await loadAllData();
-            await loadInvoiceItems();
-            await loadSalesWithDCInfo();
+            await Promise.all([
+                loadAllData(),
+                loadInvoiceItems(),
+                loadSalesWithDCInfo()
+            ]);
             
             const { data: updatedInvoices, error: loadError } = await supabase
                 .from('invoices')
@@ -567,9 +623,12 @@ function Sales({
         } catch (error) {
             console.error('Error creating invoice:', error);
             toast.error('Error creating invoice: ' + error.message);
+        } finally {
+            setLoading(prev => ({ ...prev, invoice: false }));
         }
     };
 
+    // Create Delivery Chalan with decimal support
     const createDeliveryChalan = async () => {
         if (selectedSalesForDC.length === 0) {
             toast.error('Please select at least one sale item for delivery chalan!');
@@ -582,6 +641,8 @@ function Sales({
         }
 
         try {
+            setLoading(prev => ({ ...prev, dc: true }));
+
             // Check for duplicate DC number if provided
             if (dcForm.dc_number.trim()) {
                 const { data: existingDC, error: checkError } = await supabase
@@ -592,6 +653,7 @@ function Sales({
 
                 if (existingDC && !checkError) {
                     toast.error('DC number already exists!');
+                    setLoading(prev => ({ ...prev, dc: false }));
                     return;
                 }
             }
@@ -618,7 +680,8 @@ function Sales({
             const dcItemsToInsert = [];
 
             for (const sale of selectedSalesForDC) {
-                const quantity = dcItemQuantities[sale.id] || sale.remainingDCQuantity || sale.moveQuantity;
+                const saleInfo = salesWithDCInfo.find(s => s.id === sale.id);
+                const quantity = parseFloat(dcItemQuantities[sale.id]) || parseFloat(saleInfo?.remainingDCQuantity || sale.moveQuantity);
                 
                 if (quantity > 0) {
                     // Find variant to get actual price
@@ -629,7 +692,7 @@ function Sales({
                         .single();
 
                     if (!variantError && variantData) {
-                        const variantPrice = variantData.price || sale.price || 0;
+                        const variantPrice = parseFloat(variantData.price) || parseFloat(sale.price) || 0;
                         
                         dcItemsToInsert.push({
                             dc_id: dcData.id,
@@ -642,6 +705,25 @@ function Sales({
                             quantity: quantity,
                             variant_price: variantPrice
                         });
+
+                        // Update or delete sale record (only for tracking, not stock movement)
+                        if (quantity === parseFloat(sale.moveQuantity)) {
+                            // Delete sale if fully moved to DC
+                            await supabase
+                                .from('sales')
+                                .delete()
+                                .eq('id', sale.id);
+                        } else {
+                            // Update sale quantity if partial
+                            const newSaleQuantity = parseFloat(sale.moveQuantity) - quantity;
+                            await supabase
+                                .from('sales')
+                                .update({
+                                    move_quantity: newSaleQuantity,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', sale.id);
+                        }
                     }
                 }
             }
@@ -668,9 +750,11 @@ function Sales({
             setShowDCModal(false);
             
             // Reload data
-            await loadDCItems();
-            await loadSalesWithDCInfo();
-            await loadAllData();
+            await Promise.all([
+                loadDCItems(),
+                loadSalesWithDCInfo(),
+                loadAllData()
+            ]);
             
             const { data: updatedDCs, error: loadError } = await supabase
                 .from('delivery_chalans')
@@ -684,6 +768,8 @@ function Sales({
         } catch (error) {
             console.error('Error creating delivery chalan:', error);
             toast.error('Error creating delivery chalan: ' + error.message);
+        } finally {
+            setLoading(prev => ({ ...prev, dc: false }));
         }
     };
 
@@ -847,9 +933,65 @@ function Sales({
     };
 
     const deleteInvoice = async (invoiceId) => {
-        if (!window.confirm('Are you sure you want to delete this invoice? This will NOT restore stock quantities.')) return;
+        if (!window.confirm('Are you sure you want to delete this invoice? This will restore stock quantities.')) return;
 
         try {
+            setLoading(prev => ({ ...prev, delete: true }));
+
+            // First get all items from this invoice
+            const { data: items, error: itemsError } = await supabase
+                .from('invoice_items')
+                .select('*')
+                .eq('invoice_id', invoiceId);
+
+            if (itemsError) throw itemsError;
+
+            // Restore stock quantities for each item
+            const stockUpdatePromises = items.map(async (item) => {
+                if (item.variant_id) {
+                    const { data: variantData, error: variantError } = await supabase
+                        .from('stock_variants')
+                        .select('*')
+                        .eq('id', item.variant_id)
+                        .single();
+
+                    if (!variantError && variantData) {
+                        // Restore using quantity in variant
+                        const newVariantUsing = parseFloat(variantData.using_quantity) + parseFloat(item.quantity);
+                        
+                        await supabase
+                            .from('stock_variants')
+                            .update({
+                                using_quantity: newVariantUsing,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', variantData.id);
+                        
+                        // Also restore stock quantities
+                        const { data: stock, error: stockError } = await supabase
+                            .from('stocks')
+                            .select('using_quantity')
+                            .eq('id', variantData.stock_id)
+                            .single();
+
+                        if (!stockError) {
+                            const newStockUsing = parseFloat(stock.using_quantity) + parseFloat(item.quantity);
+                            
+                            await supabase
+                                .from('stocks')
+                                .update({
+                                    using_quantity: newStockUsing,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', variantData.stock_id);
+                        }
+                    }
+                }
+                return Promise.resolve();
+            });
+
+            await Promise.all(stockUpdatePromises);
+
             // Delete invoice items
             const { error: deleteItemsError } = await supabase
                 .from('invoice_items')
@@ -866,12 +1008,14 @@ function Sales({
 
             if (deleteInvoiceError) throw deleteInvoiceError;
 
-            toast.success('Invoice deleted successfully!');
+            toast.success('Invoice deleted successfully! Stock quantities restored.');
             
             // Reload all data
-            await loadAllData();
-            await loadInvoiceItems();
-            await loadSalesWithDCInfo();
+            await Promise.all([
+                loadAllData(),
+                loadInvoiceItems(),
+                loadSalesWithDCInfo()
+            ]);
             
             const { data: updatedInvoices, error: loadError } = await supabase
                 .from('invoices')
@@ -885,6 +1029,8 @@ function Sales({
         } catch (error) {
             console.error('Error deleting invoice:', error);
             toast.error('Error deleting invoice: ' + error.message);
+        } finally {
+            setLoading(prev => ({ ...prev, delete: false }));
         }
     };
 
@@ -892,6 +1038,71 @@ function Sales({
         if (!window.confirm('Are you sure you want to delete this delivery chalan?')) return;
 
         try {
+            setLoading(prev => ({ ...prev, delete: true }));
+
+            // First get all items from this DC
+            const { data: items, error: itemsError } = await supabase
+                .from('delivery_chalan_items')
+                .select('*')
+                .eq('dc_id', dcId);
+
+            if (itemsError) throw itemsError;
+
+            // Restore sale quantities (if sales records exist)
+            const saleUpdatePromises = items.map(async (item) => {
+                if (item.variant_id) {
+                    // Find existing sale for this variant
+                    const { data: existingSales, error: salesError } = await supabase
+                        .from('sales')
+                        .select('*')
+                        .eq('variant_id', item.variant_id)
+                        .maybeSingle();
+
+                    if (!salesError) {
+                        if (existingSales) {
+                            // Update existing sale
+                            await supabase
+                                .from('sales')
+                                .update({
+                                    move_quantity: parseFloat(existingSales.move_quantity) + parseFloat(item.quantity),
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', existingSales.id);
+                        } else {
+                            // Create new sale record
+                            const { data: variant, error: variantError } = await supabase
+                                .from('stock_variants')
+                                .select('stock_id, bare_code')
+                                .eq('id', item.variant_id)
+                                .single();
+
+                            if (!variantError) {
+                                const { data: stock, error: stockError } = await supabase
+                                    .from('stocks')
+                                    .select('part_no, name, price')
+                                    .eq('id', variant.stock_id)
+                                    .single();
+
+                                if (!stockError) {
+                                    await supabase
+                                        .from('sales')
+                                        .insert([{
+                                            stock_id: variant.stock_id,
+                                            variant_id: item.variant_id,
+                                            move_quantity: parseFloat(item.quantity),
+                                            sale_date: new Date().toLocaleDateString(),
+                                            sale_time: new Date().toLocaleTimeString()
+                                        }]);
+                                }
+                            }
+                        }
+                    }
+                }
+                return Promise.resolve();
+            });
+
+            await Promise.all(saleUpdatePromises);
+
             // Delete DC items
             const { error: deleteItemsError } = await supabase
                 .from('delivery_chalan_items')
@@ -911,9 +1122,11 @@ function Sales({
             toast.success('Delivery Chalan deleted successfully!');
             
             // Reload data
-            await loadDCItems();
-            await loadSalesWithDCInfo();
-            await loadAllData();
+            await Promise.all([
+                loadDCItems(),
+                loadSalesWithDCInfo(),
+                loadAllData()
+            ]);
             
             const { data: updatedDCs, error: loadError } = await supabase
                 .from('delivery_chalans')
@@ -927,6 +1140,8 @@ function Sales({
         } catch (error) {
             console.error('Error deleting delivery chalan:', error);
             toast.error('Error deleting delivery chalan: ' + error.message);
+        } finally {
+            setLoading(prev => ({ ...prev, delete: false }));
         }
     };
 
@@ -1097,7 +1312,7 @@ function Sales({
                                         <td>${item.product_name}</td>
                                         <td>${item.bare_code}</td>
                                         <td>${item.part_no}</td>
-                                        <td>${item.quantity}</td>
+                                        <td>${parseFloat(item.quantity).toFixed(2)}</td>
                                         <td>₹${parseFloat(item.price).toFixed(2)}</td>
                                         <td>₹${parseFloat(item.total_price || item.price * item.quantity).toFixed(2)}</td>
                                     </tr>
@@ -1108,7 +1323,7 @@ function Sales({
                         <div class="total-section">
                             <h3>Total Amount: ₹${parseFloat(invoice.total_amount || items.reduce((sum, item) => sum + (item.total_price || item.price * item.quantity), 0)).toFixed(2)}</h3>
                             <p>Total Items: ${items.length}</p>
-                            <p>Total Quantity: ${items.reduce((sum, item) => sum + item.quantity, 0)}</p>
+                            <p>Total Quantity: ${items.reduce((sum, item) => sum + parseFloat(item.quantity), 0).toFixed(2)}</p>
                         </div>
                     ` : `
                         <div style="text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 5px;">
@@ -1313,7 +1528,7 @@ function Sales({
                                         <td>${item.product_name}</td>
                                         <td>${item.bare_code}</td>
                                         <td>${item.part_no}</td>
-                                        <td>${item.quantity}</td>
+                                        <td>${parseFloat(item.quantity).toFixed(2)}</td>
                                         <td>₹${parseFloat(item.price).toFixed(2)}</td>
                                     </tr>
                                 `).join('')}
@@ -1323,8 +1538,8 @@ function Sales({
                         <div class="summary-section">
                             <h3>Delivery Summary</h3>
                             <p>Total Items: ${items.length}</p>
-                            <p>Total Quantity: ${items.reduce((sum, item) => sum + item.quantity, 0)}</p>
-                            <p>Total Value: ₹${items.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}</p>
+                            <p>Total Quantity: ${items.reduce((sum, item) => sum + parseFloat(item.quantity), 0).toFixed(2)}</p>
+                            <p>Total Value: ₹${items.reduce((sum, item) => sum + (parseFloat(item.price) * parseFloat(item.quantity)), 0).toFixed(2)}</p>
                         </div>
                     ` : `
                         <div style="text-align: center; padding: 40px; background-color: #f8f9fa; border-radius: 5px;">
@@ -1366,6 +1581,26 @@ function Sales({
 
     return(
         <div className="container">
+            {/* Loading Overlay */}
+            {loading.general && (
+                <div className="loading-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 9999
+                }}>
+                    <div className="spinner-border text-light" style={{width: '3rem', height: '3rem'}}>
+                        <span className="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            )}
+
             {/* Move Back to Stock Modal */}
             <div className="modal fade" id="moveBackModal" tabIndex="-1" aria-labelledby="moveBackModalLabel" aria-hidden="true">
                 <div className="modal-dialog">
@@ -1379,21 +1614,21 @@ function Sales({
                                 <>
                                     <div className="mb-3">
                                         <p><strong>Product:</strong> {selectedSaleForMove.name}</p>
-                                        <p><strong>Sold Quantity:</strong> {selectedSaleForMove.moveQuantity}</p>
+                                        <p><strong>Sold Quantity:</strong> {parseFloat(selectedSaleForMove.moveQuantity).toFixed(2)}</p>
                                         <p><strong>Barcode:</strong> {selectedSaleForMove.BareCode}</p>
-                                        <p><strong>Price:</strong> ₹{selectedSaleForMove.price}</p>
+                                        <p><strong>Price:</strong> ₹{parseFloat(selectedSaleForMove.price).toFixed(2)}</p>
                                     </div>
                                     <div className="form-floating mb-3">
                                         <input 
-                                            type="number" 
+                                            type="text" 
                                             className="form-control" 
                                             placeholder="Quantity to move back"
-                                            min="1"
-                                            max={selectedSaleForMove.moveQuantity}
-                                            value={moveBackQuantity[selectedSaleForMove.id] || selectedSaleForMove.moveQuantity}
-                                            onChange={(e) => handleMoveBackQuantityChange(selectedSaleForMove.id, parseInt(e.target.value) || 1)}
+                                            pattern="[0-9]*\.?[0-9]{0,2}"
+                                            value={moveBackQuantity[selectedSaleForMove.id] || parseFloat(selectedSaleForMove.moveQuantity).toFixed(2)}
+                                            onChange={(e) => handleQuantityChange(e.target.value, 'moveBack', selectedSaleForMove.id, selectedSaleForMove.moveQuantity)}
                                         />
                                         <label>Quantity to move back to stock</label>
+                                        <div className="form-text">Enter decimal quantity (e.g., 2.5, 7.1)</div>
                                     </div>
                                 </>
                             )}
@@ -1405,8 +1640,16 @@ function Sales({
                                 className="btn btn-primary" 
                                 onClick={() => moveSaleBackToStock(selectedSaleForMove)}
                                 data-bs-dismiss="modal"
+                                disabled={loading.moveBack}
                             >
-                                Move to Stock
+                                {loading.moveBack ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        Moving...
+                                    </>
+                                ) : (
+                                    'Move to Stock'
+                                )}
                             </button>
                         </div>
                     </div>
@@ -1491,46 +1734,45 @@ function Sales({
                                                 <tbody>
                                                     {selectedSalesForInvoice.map((sale, index) => {
                                                         const saleInfo = salesWithDCInfo.find(s => s.id === sale.id);
-                                                        const availableQty = saleInfo?.remainingInvoiceQuantity || sale.moveQuantity;
-                                                        const quantity = invoiceItemQuantities[sale.id] || availableQty;
-                                                        const total = (sale.price || 0) * quantity;
+                                                        const availableQty = saleInfo?.remainingInvoiceQuantity || parseFloat(sale.moveQuantity);
+                                                        const quantity = parseFloat(invoiceItemQuantities[sale.id]) || availableQty;
+                                                        const total = (parseFloat(sale.price) || 0) * quantity;
                                                         
                                                         return (
                                                             <tr key={index}>
                                                                 <td>{sale.name}</td>
                                                                 <td>{sale.BareCode}</td>
                                                                 <td>
-                                                                    <span className="badge bg-info">{availableQty}</span>
+                                                                    <span className="badge bg-info">{availableQty.toFixed(2)}</span>
                                                                 </td>
                                                                 <td>
                                                                     <div className="d-flex align-items-center gap-2">
                                                                         <button
                                                                             className="btn btn-sm btn-outline-secondary"
-                                                                            onClick={() => handleInvoiceQuantityChange(sale.id, quantity - 1)}
-                                                                            disabled={quantity <= 1}
+                                                                            onClick={() => handleQuantityChange((quantity - 0.1).toString(), 'invoice', sale.id, availableQty)}
+                                                                            disabled={quantity <= 0.1}
                                                                         >
                                                                             -
                                                                         </button>
                                                                         <input
-                                                                            type="number"
+                                                                            type="text"
                                                                             className="form-control form-control-sm text-center"
-                                                                            style={{ width: '70px' }}
-                                                                            min="1"
-                                                                            max={availableQty}
-                                                                            value={quantity}
-                                                                            onChange={(e) => handleInvoiceQuantityChange(sale.id, parseInt(e.target.value) || 1)}
+                                                                            style={{ width: '80px' }}
+                                                                            pattern="[0-9]*\.?[0-9]{0,2}"
+                                                                            value={quantity.toFixed(2)}
+                                                                            onChange={(e) => handleQuantityChange(e.target.value, 'invoice', sale.id, availableQty)}
                                                                         />
                                                                         <button
                                                                             className="btn btn-sm btn-outline-secondary"
-                                                                            onClick={() => handleInvoiceQuantityChange(sale.id, quantity + 1)}
+                                                                            onClick={() => handleQuantityChange((quantity + 0.1).toString(), 'invoice', sale.id, availableQty)}
                                                                             disabled={quantity >= availableQty}
                                                                         >
                                                                             +
                                                                         </button>
                                                                     </div>
                                                                 </td>
-                                                                <td>₹{sale.price}</td>
-                                                                <td>₹{total}</td>
+                                                                <td>₹{parseFloat(sale.price).toFixed(2)}</td>
+                                                                <td>₹{total.toFixed(2)}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -1541,9 +1783,9 @@ function Sales({
                                                         <td></td>
                                                         <td>
                                                             <strong>₹{selectedSalesForInvoice.reduce((sum, sale) => {
-                                                                const quantity = invoiceItemQuantities[sale.id] || (salesWithDCInfo.find(s => s.id === sale.id)?.remainingInvoiceQuantity || sale.moveQuantity);
-                                                                return sum + (sale.price * quantity);
-                                                            }, 0)}</strong>
+                                                                const quantity = parseFloat(invoiceItemQuantities[sale.id]) || (salesWithDCInfo.find(s => s.id === sale.id)?.remainingInvoiceQuantity || parseFloat(sale.moveQuantity));
+                                                                return sum + (parseFloat(sale.price) * quantity);
+                                                            }, 0).toFixed(2)}</strong>
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -1561,7 +1803,7 @@ function Sales({
                                         customer_name: "",
                                         customer_address: ""
                                     });
-                                }}>
+                                }} disabled={loading.invoice}>
                                     Cancel
                                 </button>
                                 {selectedInvoice ? (
@@ -1569,8 +1811,13 @@ function Sales({
                                         Update Invoice
                                     </button>
                                 ) : (
-                                    <button type="button" className="btn btn-primary" onClick={createInvoice}>
-                                        Create Invoice
+                                    <button type="button" className="btn btn-primary" onClick={createInvoice} disabled={loading.invoice}>
+                                        {loading.invoice ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Creating...
+                                            </>
+                                        ) : 'Create Invoice'}
                                     </button>
                                 )}
                             </div>
@@ -1656,46 +1903,45 @@ function Sales({
                                                 <tbody>
                                                     {selectedSalesForDC.map((sale, index) => {
                                                         const saleInfo = salesWithDCInfo.find(s => s.id === sale.id);
-                                                        const availableQty = saleInfo?.remainingDCQuantity || sale.moveQuantity;
-                                                        const quantity = dcItemQuantities[sale.id] || availableQty;
-                                                        const total = (sale.price || 0) * quantity;
+                                                        const availableQty = saleInfo?.remainingDCQuantity || parseFloat(sale.moveQuantity);
+                                                        const quantity = parseFloat(dcItemQuantities[sale.id]) || availableQty;
+                                                        const total = (parseFloat(sale.price) || 0) * quantity;
                                                         
                                                         return (
                                                             <tr key={index}>
                                                                 <td>{sale.name}</td>
                                                                 <td>{sale.BareCode}</td>
                                                                 <td>
-                                                                    <span className="badge bg-info">{availableQty}</span>
+                                                                    <span className="badge bg-info">{availableQty.toFixed(2)}</span>
                                                                 </td>
                                                                 <td>
                                                                     <div className="d-flex align-items-center gap-2">
                                                                         <button
                                                                             className="btn btn-sm btn-outline-secondary"
-                                                                            onClick={() => handleDCQuantityChange(sale.id, quantity - 1)}
-                                                                            disabled={quantity <= 1}
+                                                                            onClick={() => handleQuantityChange((quantity - 0.1).toString(), 'dc', sale.id, availableQty)}
+                                                                            disabled={quantity <= 0.1}
                                                                         >
                                                                             -
                                                                         </button>
                                                                         <input
-                                                                            type="number"
+                                                                            type="text"
                                                                             className="form-control form-control-sm text-center"
-                                                                            style={{ width: '70px' }}
-                                                                            min="1"
-                                                                            max={availableQty}
-                                                                            value={quantity}
-                                                                            onChange={(e) => handleDCQuantityChange(sale.id, parseInt(e.target.value) || 1)}
+                                                                            style={{ width: '80px' }}
+                                                                            pattern="[0-9]*\.?[0-9]{0,2}"
+                                                                            value={quantity.toFixed(2)}
+                                                                            onChange={(e) => handleQuantityChange(e.target.value, 'dc', sale.id, availableQty)}
                                                                         />
                                                                         <button
                                                                             className="btn btn-sm btn-outline-secondary"
-                                                                            onClick={() => handleDCQuantityChange(sale.id, quantity + 1)}
+                                                                            onClick={() => handleQuantityChange((quantity + 0.1).toString(), 'dc', sale.id, availableQty)}
                                                                             disabled={quantity >= availableQty}
                                                                         >
                                                                             +
                                                                         </button>
                                                                     </div>
                                                                 </td>
-                                                                <td>₹{sale.price}</td>
-                                                                <td>₹{total}</td>
+                                                                <td>₹{parseFloat(sale.price).toFixed(2)}</td>
+                                                                <td>₹{total.toFixed(2)}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -1706,9 +1952,9 @@ function Sales({
                                                         <td></td>
                                                         <td>
                                                             <strong>₹{selectedSalesForDC.reduce((sum, sale) => {
-                                                                const quantity = dcItemQuantities[sale.id] || (salesWithDCInfo.find(s => s.id === sale.id)?.remainingDCQuantity || sale.moveQuantity);
-                                                                return sum + (sale.price * quantity);
-                                                            }, 0)}</strong>
+                                                                const quantity = parseFloat(dcItemQuantities[sale.id]) || (salesWithDCInfo.find(s => s.id === sale.id)?.remainingDCQuantity || parseFloat(sale.moveQuantity));
+                                                                return sum + (parseFloat(sale.price) * quantity);
+                                                            }, 0).toFixed(2)}</strong>
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -1726,7 +1972,7 @@ function Sales({
                                         customer_name: "",
                                         customer_address: ""
                                     });
-                                }}>
+                                }} disabled={loading.dc}>
                                     Cancel
                                 </button>
                                 {selectedDC ? (
@@ -1734,8 +1980,13 @@ function Sales({
                                         Update DC
                                     </button>
                                 ) : (
-                                    <button type="button" className="btn btn-primary" onClick={createDeliveryChalan}>
-                                        Create Delivery Chalan
+                                    <button type="button" className="btn btn-primary" onClick={createDeliveryChalan} disabled={loading.dc}>
+                                        {loading.dc ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Creating...
+                                            </>
+                                        ) : 'Create Delivery Chalan'}
                                     </button>
                                 )}
                             </div>
@@ -1783,7 +2034,7 @@ function Sales({
                                                         <td>{invoice.customer_name}</td>
                                                         <td>{invoice.invoice_date}</td>
                                                         <td>{invoice.invoice_time}</td>
-                                                        <td>₹{invoice.total_amount}</td>
+                                                        <td>₹{parseFloat(invoice.total_amount).toFixed(2)}</td>
                                                         <td>
                                                             <span className={`badge ${
                                                                 invoice.status === 'completed' ? 'bg-success' : 
@@ -1816,8 +2067,13 @@ function Sales({
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => deleteInvoice(invoice.id)}
+                                                                    disabled={loading.delete}
                                                                 >
-                                                                    <i className="fa-solid fa-trash"></i>
+                                                                    {loading.delete ? (
+                                                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    ) : (
+                                                                        <i className="fa-solid fa-trash"></i>
+                                                                    )}
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -1908,8 +2164,13 @@ function Sales({
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => deleteDC(dc.id)}
+                                                                    disabled={loading.delete}
                                                                 >
-                                                                    <i className="fa-solid fa-trash"></i>
+                                                                    {loading.delete ? (
+                                                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    ) : (
+                                                                        <i className="fa-solid fa-trash"></i>
+                                                                    )}
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -1951,7 +2212,7 @@ function Sales({
                                             <div className="col-md-6">
                                                 <p><strong>Customer Address:</strong> {selectedInvoice.customer_address || 'N/A'}</p>
                                                 <p><strong>Time:</strong> {selectedInvoice.invoice_time}</p>
-                                                <p><strong>Total Amount:</strong> ₹{selectedInvoice.total_amount}</p>
+                                                <p><strong>Total Amount:</strong> ₹{parseFloat(selectedInvoice.total_amount).toFixed(2)}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -1979,9 +2240,9 @@ function Sales({
                                                         <td>{item.product_name}</td>
                                                         <td>{item.bare_code}</td>
                                                         <td>{item.part_no}</td>
-                                                        <td>{item.quantity}</td>
-                                                        <td>₹{item.price}</td>
-                                                        <td>₹{item.total_price}</td>
+                                                        <td>{parseFloat(item.quantity).toFixed(2)}</td>
+                                                        <td>₹{parseFloat(item.price).toFixed(2)}</td>
+                                                        <td>₹{parseFloat(item.total_price).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2055,8 +2316,8 @@ function Sales({
                                                         <td>{item.product_name}</td>
                                                         <td>{item.bare_code}</td>
                                                         <td>{item.part_no}</td>
-                                                        <td>{item.quantity}</td>
-                                                        <td>₹{item.price}</td>
+                                                        <td>{parseFloat(item.quantity).toFixed(2)}</td>
+                                                        <td>₹{parseFloat(item.price).toFixed(2)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2223,36 +2484,36 @@ function Sales({
                                                 <span className="badge bg-danger ms-2">DC Complete</span>
                                             )}
                                         </td>
-                                        <td>₹{sale.price}</td>
+                                        <td>₹{parseFloat(sale.price).toFixed(2)}</td>
                                         <td>
-                                            <span className="badge bg-primary">{sale.moveQuantity}</span>
+                                            <span className="badge bg-primary">{parseFloat(sale.moveQuantity).toFixed(2)}</span>
                                         </td>
                                         <td>
                                             {sale.invoiceQuantity > 0 ? (
-                                                <span className="badge bg-info">{sale.invoiceQuantity}</span>
+                                                <span className="badge bg-info">{parseFloat(sale.invoiceQuantity).toFixed(2)}</span>
                                             ) : (
-                                                <span className="badge bg-secondary">0</span>
+                                                <span className="badge bg-secondary">0.00</span>
                                             )}
                                         </td>
                                         <td>
                                             {sale.dcQuantity > 0 ? (
-                                                <span className="badge bg-warning">{sale.dcQuantity}</span>
+                                                <span className="badge bg-warning">{parseFloat(sale.dcQuantity).toFixed(2)}</span>
                                             ) : (
-                                                <span className="badge bg-secondary">0</span>
+                                                <span className="badge bg-secondary">0.00</span>
                                             )}
                                         </td>
                                         <td>
                                             {sale.remainingInvoiceQuantity > 0 ? (
-                                                <span className="badge bg-success">{sale.remainingInvoiceQuantity}</span>
+                                                <span className="badge bg-success">{parseFloat(sale.remainingInvoiceQuantity).toFixed(2)}</span>
                                             ) : (
-                                                <span className="badge bg-danger">0</span>
+                                                <span className="badge bg-danger">0.00</span>
                                             )}
                                         </td>
                                         <td>
                                             {sale.remainingDCQuantity > 0 ? (
-                                                <span className="badge bg-success">{sale.remainingDCQuantity}</span>
+                                                <span className="badge bg-success">{parseFloat(sale.remainingDCQuantity).toFixed(2)}</span>
                                             ) : (
-                                                <span className="badge bg-danger">0</span>
+                                                <span className="badge bg-danger">0.00</span>
                                             )}
                                         </td>
                                         <td>{sale.saleDate}</td>
@@ -2271,8 +2532,13 @@ function Sales({
                                                 className="btn btn-sm btn-outline-danger"
                                                 onClick={() => deleteSale(sale.id)}
                                                 title="Delete sale"
+                                                disabled={loading.delete}
                                             >
-                                                <i className="fa-solid fa-trash"></i>
+                                                {loading.delete ? (
+                                                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                ) : (
+                                                    <i className="fa-solid fa-trash"></i>
+                                                )}
                                             </button>
                                         </td>
                                     </tr>

@@ -113,7 +113,7 @@ function BMR({
         SNo: "",
         name: "",
         price: "",
-        Quantity: 1
+        Quantity: "1.00"
     });
 
     // History State
@@ -260,7 +260,7 @@ function BMR({
                 const processToAdd = {
                     template_id: selectedBMRForProcess.id,
                     name: processTemplate.name,
-                    amount: 0, // Price removed as requested
+                    amount: 0,
                     handler: '',
                     status: 'initiate',
                     elapsed_time: 0,
@@ -358,7 +358,7 @@ function BMR({
 
         const processToAdd = {
             name: newProcess.name.trim(),
-            amount: 0, // Price removed as requested
+            amount: 0,
             status: 'initiate'
         };
 
@@ -386,7 +386,7 @@ function BMR({
         toast.success('Process removed from template!');
     };
 
-    // Load BMR data from Supabase
+    // Load BMR data from Supabase with decimal quantity support
     const loadBMRData = async () => {
         if (!activeProductionDepartment) {
             toast.error('No production department selected!');
@@ -433,6 +433,36 @@ function BMR({
 
                                         if (templateDataError) throw templateDataError;
 
+                                        // Parse variant details if available
+                                        const parsedTemplateData = (templateData || []).map(item => {
+                                            let variantDetails = [];
+                                            if (item.variant_details) {
+                                                try {
+                                                    variantDetails = typeof item.variant_details === 'string' 
+                                                        ? JSON.parse(item.variant_details) 
+                                                        : item.variant_details;
+                                                } catch (e) {
+                                                    console.error('Error parsing variant details:', e);
+                                                }
+                                            }
+
+                                            return {
+                                                id: item.id,
+                                                rawMaterial: item.raw_material,
+                                                partNo: item.part_no,
+                                                internalSerialNo: item.internal_serial_no,
+                                                description: item.description,
+                                                assemblyName: item.assembly_name,
+                                                quantity: parseFloat(item.quantity) || 1.00,
+                                                price: parseFloat(item.price) || 0,
+                                                issuedBy: item.issued_by,
+                                                receivedBy: item.received_by,
+                                                variantDetails: variantDetails,
+                                                totalQuantity: parseFloat(item.total_quantity) || parseFloat(item.quantity) || 1.00,
+                                                averagePrice: parseFloat(item.average_price) || 0
+                                            };
+                                        });
+
                                         return {
                                             id: template.id,
                                             name: template.name,
@@ -442,19 +472,7 @@ function BMR({
                                             department: template.department,
                                             productId: product.id,
                                             assemblyId: assembly.id,
-                                            templateData: (templateData || []).map(item => ({
-                                                id: item.id,
-                                                rawMaterial: item.raw_material,
-                                                partNo: item.part_no,
-                                                internalSerialNo: item.internal_serial_no,
-                                                description: item.description,
-                                                assemblyName: item.assembly_name,
-                                                quantity: item.quantity,
-                                                price: item.price,
-                                                issuedBy: item.issued_by,
-                                                receivedBy: item.received_by,
-                                                variantDetails: item.variant_details
-                                            }))
+                                            templateData: parsedTemplateData
                                         };
                                     })
                                 );
@@ -735,7 +753,7 @@ function BMR({
         }
     };
 
-    // Load processes
+    // Load processes with decimal support
     const loadProcesses = async () => {
         try {
             const { data: processesData, error: processesError } = await supabase
@@ -1534,7 +1552,7 @@ function BMR({
         }
     };
 
-    // Add product to BMR template in Supabase (accepting variants)
+    // Add product to BMR template in Supabase (accepting variants) with decimal support
     const addProductToBMRTemplate = async (bmrId, productId, assemblyId) => {
         try {
             const newProductEntry = {
@@ -1543,11 +1561,13 @@ function BMR({
                 internal_serial_no: "",
                 description: "",
                 assembly_name: "",
-                quantity: 1,
+                quantity: 1.00,
                 price: 0,
                 issued_by: "",
                 received_by: "",
-                variant_details: null
+                variant_details: null,
+                total_quantity: 1.00,
+                average_price: 0
             };
 
             const { data, error } = await supabase
@@ -1567,11 +1587,13 @@ function BMR({
                 internalSerialNo: data[0].internal_serial_no,
                 description: data[0].description,
                 assemblyName: data[0].assembly_name,
-                quantity: data[0].quantity,
-                price: data[0].price,
+                quantity: parseFloat(data[0].quantity) || 1.00,
+                price: parseFloat(data[0].price) || 0,
                 issuedBy: data[0].issued_by,
                 receivedBy: data[0].received_by,
-                variantDetails: data[0].variant_details
+                variantDetails: data[0].variant_details,
+                totalQuantity: parseFloat(data[0].total_quantity) || 1.00,
+                averagePrice: parseFloat(data[0].average_price) || 0
             };
 
             setBmrProducts(prev =>
@@ -1612,7 +1634,7 @@ function BMR({
         }
     };
 
-    // Update BMR template product data in Supabase
+    // Update BMR template product data in Supabase with decimal support
     const updateBMRTemplateProduct = async (bmrId, productIndex, field, value, productId, assemblyId) => {
         try {
             const currentProducts = bmrProducts.find(p => p.id === productId)
@@ -1633,11 +1655,20 @@ function BMR({
                 'price': 'price',
                 'issuedBy': 'issued_by',
                 'receivedBy': 'received_by',
-                'variantDetails': 'variant_details'
+                'variantDetails': 'variant_details',
+                'totalQuantity': 'total_quantity',
+                'averagePrice': 'average_price'
             };
 
             const supabaseField = supabaseFieldMap[field] || field;
-            const updateData = { [supabaseField]: value };
+            
+            // Parse decimal values for quantity fields
+            let parsedValue = value;
+            if (field === 'quantity' || field === 'price' || field === 'totalQuantity' || field === 'averagePrice') {
+                parsedValue = parseFloat(value) || 0;
+            }
+
+            const updateData = { [supabaseField]: parsedValue };
 
             const { error } = await supabase
                 .from('bmr_template_data')
@@ -1645,6 +1676,15 @@ function BMR({
                 .eq('id', productToUpdate.id);
 
             if (error) throw error;
+
+            // Update local state
+            const updatedProduct = { ...productToUpdate, [field]: parsedValue };
+            
+            // Recalculate total price if quantity or price changed
+            if (field === 'quantity' || field === 'price') {
+                const totalPrice = (parseFloat(updatedProduct.quantity) || 0) * (parseFloat(updatedProduct.price) || 0);
+                // Don't update total price field as it's calculated on the fly
+            }
 
             setBmrProducts(prev =>
                 prev.map(product =>
@@ -1661,7 +1701,7 @@ function BMR({
                                                     ...bmr,
                                                     templateData: bmr.templateData.map((product, idx) =>
                                                         idx === productIndex
-                                                            ? { ...product, [field]: value }
+                                                            ? updatedProduct
                                                             : product
                                                     )
                                                 }
@@ -1680,7 +1720,7 @@ function BMR({
                     ...prev,
                     templateData: prev.templateData.map((product, idx) =>
                         idx === productIndex
-                            ? { ...product, [field]: value }
+                            ? updatedProduct
                             : product
                     )
                 }));
@@ -1690,15 +1730,15 @@ function BMR({
         }
     };
 
-    // Print BMR Template with multiple barcodes support
+    // Print BMR Template with decimal support
     const printBMRTemplate = (bmr, includeProcesses = true) => {
         const printWindow = window.open('', '_blank');
         const templateData = bmr.templateData || [];
         const bmrProcesses = includeProcesses ? getBMRProcesses(bmr.id) : [];
         
-        // Calculate totals
+        // Calculate totals with decimal support
         const templateTotal = templateData.reduce((sum, item) => {
-            return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+            return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
         }, 0);
         
         const processTotal = bmrProcesses.reduce((sum, process) => {
@@ -1735,8 +1775,7 @@ function BMR({
                         .grand-total { font-size: 1.2em; font-weight: bold; color: #0d6efd; }
                         .handler-details { margin-left: 20px; font-size: 0.9em; }
                         .handler-row { border-bottom: 1px solid #ddd; padding: 4px 0; }
-                        .barcode-details { font-size: 0.9em; color: #666; margin-top: 2px; }
-                        .barcode-item { display: inline-block; margin-right: 10px; }
+                        .decimal-qty { font-family: monospace; }
                     </style>
                 </head>
                 <body>
@@ -1756,7 +1795,6 @@ function BMR({
                                     <th>S.NO</th>
                                     <th>RAW MATERIAL/PART/NAME/PRODUCT CODE</th>
                                     <th>PartNo/SKU</th>
-                                    <th>INTERNAL SERIAL.NO (Barcodes)</th>
                                     <th>DESCRIPTION</th>
                                     <th>Qty</th>
                                     <th>Avg Price (₹)</th>
@@ -1767,38 +1805,17 @@ function BMR({
                             </thead>
                             <tbody>
                                 ${templateData.map((item, index) => {
-                                    const totalQuantity = parseInt(item.quantity) || 1;
-                                    const totalPrice = parseFloat(item.totalPrice) || (parseFloat(item.price) || 0) * totalQuantity;
-                                    const averagePrice = totalQuantity > 0 ? totalPrice / totalQuantity : 0;
-                                    const barcodes = item.internalSerialNo ? item.internalSerialNo.split(',').map(b => b.trim()) : [];
-                                    
-                                    // Parse variant details if available
-                                    let variantDetails = [];
-                                    if (item.variantDetails) {
-                                        try {
-                                            variantDetails = JSON.parse(item.variantDetails);
-                                        } catch (e) {
-                                            console.error('Error parsing variant details:', e);
-                                        }
-                                    }
+                                    const totalQuantity = parseFloat(item.totalQuantity) || parseFloat(item.quantity) || 1;
+                                    const averagePrice = parseFloat(item.averagePrice) || parseFloat(item.price) || 0;
+                                    const totalPrice = totalQuantity * averagePrice;
                                     
                                     return `
                                         <tr>
                                             <td>${index + 1}</td>
                                             <td>${item.rawMaterial || ''}</td>
                                             <td>${item.partNo || ''}</td>
-                                            <td>
-                                                ${barcodes.map(barcode => `<div class="barcode-item">${barcode}</div>`).join('')}
-                                                ${variantDetails.length > 0 ? `
-                                                    <div class="barcode-details">
-                                                        ${variantDetails.map(variant => `
-                                                            <div>${variant.barcode}: ${variant.qty} × ₹${variant.price} = ₹${(variant.qty * variant.price).toFixed(2)}</div>
-                                                        `).join('')}
-                                                    </div>
-                                                ` : ''}
-                                            </td>
                                             <td>${item.description || ''}</td>
-                                            <td>${item.quantity || 1}</td>
+                                            <td class="decimal-qty">${totalQuantity.toFixed(2)}</td>
                                             <td>₹${averagePrice.toFixed(2)}</td>
                                             <td>₹${totalPrice.toFixed(2)}</td>
                                             <td>${item.issuedBy || ''}</td>
@@ -2055,11 +2072,13 @@ function BMR({
                     internal_serial_no: item.internalSerialNo || '',
                     description: item.description || '',
                     assembly_name: item.assemblyName || '',
-                    quantity: item.quantity || 1,
-                    price: item.price || 0,
+                    quantity: parseFloat(item.quantity) || 1.00,
+                    price: parseFloat(item.price) || 0,
                     issued_by: item.issuedBy || '',
                     received_by: item.receivedBy || '',
-                    variant_details: item.variantDetails || null
+                    variant_details: item.variantDetails || null,
+                    total_quantity: parseFloat(item.totalQuantity) || parseFloat(item.quantity) || 1.00,
+                    average_price: parseFloat(item.averagePrice) || parseFloat(item.price) || 0
                 }));
 
                 const { error: insertError } = await supabase
@@ -2127,7 +2146,7 @@ function BMR({
             const processToAdd = {
                 template_id: selectedBMRForProcess.id,
                 name: newProcess.name.trim(),
-                amount: 0, // Price removed as requested
+                amount: 0,
                 handler: newProcess.handler,
                 status: newProcess.status,
                 elapsed_time: 0,
@@ -2387,7 +2406,7 @@ function BMR({
                 .from('processes')
                 .update({
                     name: newProcess.name.trim(),
-                    amount: 0, // Price removed as requested
+                    amount: 0,
                     handler: newProcess.handler,
                     status: newProcess.status
                 })
@@ -2427,7 +2446,7 @@ function BMR({
         
         // Calculate total price (template items + process costs)
         const templateTotal = bmr.templateData?.reduce((sum, item) => {
-            return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+            return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
         }, 0) || 0;
 
         const processTotal = getBMRProcesses(bmr.id).reduce((sum, process) => {
@@ -2451,7 +2470,7 @@ function BMR({
             SNo: `SN-${bmr.initialCode}`,
             name: `${bmr.name} (${bmr.initialCode})`,
             price: totalPrice.toFixed(2),
-            Quantity: 1
+            Quantity: "1.00"
         });
         
         setCompletedBMR(bmr);
@@ -2465,256 +2484,260 @@ function BMR({
             return {
                 ...prev,
                 handler: handlerName,
-                amount: "0" // Price removed
+                amount: "0"
             };
         });
     };
 
-   // In BMR.js, update the handleCompleteBMR function
-const handleCompleteBMR = async () => {
-    if (!completedBMR) return;
+    // Handle completion of BMR with decimal support
+    const handleCompleteBMR = async () => {
+        if (!completedBMR) return;
 
-    try {
-        // 1. Calculate total price (template + processes)
-        const templateTotal = completedBMR.templateData?.reduce((sum, item) => {
-            return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
-        }, 0) || 0;
+        try {
+            // 1. Calculate total price (template + processes)
+            const templateTotal = completedBMR.templateData?.reduce((sum, item) => {
+                return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
+            }, 0) || 0;
 
-        const processTotal = getBMRProcesses(completedBMR.id).reduce((sum, process) => {
-            let processCost = 0;
-            if (process.handlers && process.handlers.length > 0) {
-                processCost = process.handlers.reduce((hSum, handler) => 
-                    hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
-            } else {
-                processCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
-            }
-            return sum + processCost;
-        }, 0);
-
-        const totalPrice = templateTotal + processTotal;
-
-        // 2. Save to history first
-        const historySaved = await saveBMRToHistory(completedBMR);
-        if (!historySaved) {
-            toast.error('Error saving BMR history');
-            return;
-        }
-
-        // 3. Print the BMR with processes
-        printBMRTemplate(completedBMR, true);
-
-        // 4. FIXED: Release using_quantity (BMR is complete, so materials are consumed)
-        for (const templateItem of completedBMR.templateData || []) {
-            if (templateItem.internalSerialNo) {
-                // Parse multiple barcodes if comma separated
-                const barcodes = templateItem.internalSerialNo.split(',').map(b => b.trim());
-                
-                // Parse variant details if available
-                let variantDetails = [];
-                if (templateItem.variantDetails) {
-                    try {
-                        variantDetails = JSON.parse(templateItem.variantDetails);
-                    } catch (e) {
-                        console.error('Error parsing variant details:', e);
-                    }
+            const processTotal = getBMRProcesses(completedBMR.id).reduce((sum, process) => {
+                let processCost = 0;
+                if (process.handlers && process.handlers.length > 0) {
+                    processCost = process.handlers.reduce((hSum, handler) => 
+                        hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
+                } else {
+                    processCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
                 }
+                return sum + processCost;
+            }, 0);
 
-                const totalQuantityNeeded = parseInt(templateItem.quantity) || 1;
-                
-                // Process each barcode
-                for (const barcode of barcodes) {
-                    try {
-                        // Get variant by barcode
-                        const { data: variant, error: variantError } = await supabase
-                            .from('stock_variants')
-                            .select('*')
-                            .eq('bare_code', barcode)
-                            .single();
+            const totalPrice = templateTotal + processTotal;
 
-                        if (!variantError && variant) {
-                            // Find variant details for this barcode
-                            const variantDetail = variantDetails.find(v => v.barcode === barcode);
-                            const allocatedQty = variantDetail ? variantDetail.qty : 1;
-                            
-                            if (allocatedQty > 0) {
-                                // FIXED: Check current using quantity and release it (not move back to quantity)
-                                const currentUsingQty = variant.using_quantity || 0;
-                                const newUsingQty = Math.max(0, currentUsingQty - allocatedQty);
-                                
-                                // Materials are consumed in BMR, so they don't go back to available quantity
-                                await supabase
-                                    .from('stock_variants')
-                                    .update({
-                                        using_quantity: newUsingQty,
-                                        updated_at: new Date().toISOString()
-                                    })
-                                    .eq('id', variant.id);
-                                
-                                // Record consumption (no movement back to quantity)
-                                await supabase
-                                    .from('stock_movements')
-                                    .insert([{
-                                        variant_id: variant.id,
-                                        movement_type: 'out',
-                                        quantity: allocatedQty,
-                                        remaining_quantity: newUsingQty,
-                                        reference_type: 'bmr_completion',
-                                        reference_id: completedBMR.id,
-                                        movement_date: new Date().toISOString()
-                                    }]);
-                                
-                                // Update stock totals
-                                const { data: stockData, error: stockError } = await supabase
-                                    .from('stocks')
-                                    .select('using_quantity')
-                                    .eq('id', variant.stock_id)
-                                    .single();
+            // 2. Save to history first
+            const historySaved = await saveBMRToHistory(completedBMR);
+            if (!historySaved) {
+                toast.error('Error saving BMR history');
+                return;
+            }
 
-                                if (!stockError) {
-                                    const stockUsingQty = stockData.using_quantity || 0;
-                                    const newStockUsingQty = Math.max(0, stockUsingQty - allocatedQty);
+            // 3. Print the BMR with processes
+            printBMRTemplate(completedBMR, true);
+
+            // 4. Release using_quantity from variants
+            for (const templateItem of completedBMR.templateData || []) {
+                if (templateItem.internalSerialNo) {
+                    // Parse multiple barcodes if comma separated
+                    const barcodes = templateItem.internalSerialNo.split(',').map(b => b.trim());
+                    
+                    // Parse variant details if available
+                    let variantDetails = [];
+                    if (templateItem.variantDetails) {
+                        try {
+                            variantDetails = typeof templateItem.variantDetails === 'string' 
+                                ? JSON.parse(templateItem.variantDetails) 
+                                : templateItem.variantDetails;
+                        } catch (e) {
+                            console.error('Error parsing variant details:', e);
+                        }
+                    }
+
+                    const totalQuantityNeeded = parseFloat(templateItem.quantity) || 1.00;
+                    
+                    // Process each barcode
+                    for (const barcode of barcodes) {
+                        try {
+                            // Get variant by barcode
+                            const { data: variant, error: variantError } = await supabase
+                                .from('stock_variants')
+                                .select('*')
+                                .eq('bare_code', barcode)
+                                .single();
+
+                            if (!variantError && variant) {
+                                // Find variant details for this barcode
+                                const variantDetail = variantDetails.find(v => v.barcode === barcode);
+                                const allocatedQty = variantDetail ? parseFloat(variantDetail.qty) : parseFloat(totalQuantityNeeded / barcodes.length);
+                                
+                                if (allocatedQty > 0) {
+                                    // Release using quantity
+                                    const currentUsingQty = parseFloat(variant.using_quantity) || 0;
+                                    const newUsingQty = Math.max(0, currentUsingQty - allocatedQty);
                                     
                                     await supabase
-                                        .from('stocks')
+                                        .from('stock_variants')
                                         .update({
-                                            using_quantity: newStockUsingQty,
+                                            using_quantity: newUsingQty,
                                             updated_at: new Date().toISOString()
                                         })
-                                        .eq('id', variant.stock_id);
+                                        .eq('id', variant.id);
+                                    
+                                    // Record consumption
+                                    await supabase
+                                        .from('stock_movements')
+                                        .insert([{
+                                            variant_id: variant.id,
+                                            movement_type: 'out',
+                                            quantity: allocatedQty,
+                                            remaining_quantity: newUsingQty,
+                                            reference_type: 'bmr_completion',
+                                            reference_id: completedBMR.id,
+                                            movement_date: new Date().toISOString()
+                                        }]);
+                                    
+                                    // Update stock totals
+                                    const { data: stockData, error: stockError } = await supabase
+                                        .from('stocks')
+                                        .select('using_quantity')
+                                        .eq('id', variant.stock_id)
+                                        .single();
+
+                                    if (!stockError) {
+                                        const stockUsingQty = parseFloat(stockData.using_quantity) || 0;
+                                        const newStockUsingQty = Math.max(0, stockUsingQty - allocatedQty);
+                                        
+                                        await supabase
+                                            .from('stocks')
+                                            .update({
+                                                using_quantity: newStockUsingQty,
+                                                updated_at: new Date().toISOString()
+                                            })
+                                            .eq('id', variant.stock_id);
+                                    }
                                 }
                             }
+                        } catch (error) {
+                            console.error(`Error processing variant ${barcode}:`, error);
                         }
-                    } catch (error) {
-                        console.error(`Error processing variant ${barcode}:`, error);
                     }
                 }
             }
-        }
 
-        // 5. Add completed product to stock
-        const completedProduct = {
-            bare_code: newCompletedProduct.BareCode,
-            part_no: newCompletedProduct.PartNo,
-            lot_no: newCompletedProduct.LotNo,
-            s_no: newCompletedProduct.SNo,
-            name: newCompletedProduct.name,
-            price: parseFloat(totalPrice) || 0,
-            quantity: parseInt(newCompletedProduct.Quantity) || 1,
-            using_quantity: 0
-        };
+            // 5. Add completed product to stock with decimal support
+            const completedProduct = {
+                bare_code: newCompletedProduct.BareCode,
+                part_no: newCompletedProduct.PartNo,
+                lot_no: newCompletedProduct.LotNo,
+                s_no: newCompletedProduct.SNo,
+                name: newCompletedProduct.name,
+                price: parseFloat(totalPrice) || 0,
+                quantity: parseFloat(newCompletedProduct.Quantity) || 1.00,
+                using_quantity: 0,
+                average_price: parseFloat(totalPrice) || 0,
+                total_received: parseFloat(newCompletedProduct.Quantity) || 1.00
+            };
 
-        // Check if completed product already exists in stock
-        const { data: existingStockByBarcode, error: barcodeError } = await supabase
-            .from('stocks')
-            .select('*')
-            .eq('bare_code', completedProduct.bare_code)
-            .single();
-
-        const { data: existingStockByPartNo, error: partNoError } = await supabase
-            .from('stocks')
-            .select('*')
-            .eq('part_no', completedProduct.part_no)
-            .single();
-
-        let existingStock = existingStockByBarcode || existingStockByPartNo;
-        let stockOperation;
-
-        if (existingStock) {
-            // Product exists, update quantity
-            const newQuantity = existingStock.quantity + completedProduct.quantity;
-            const newTotalReceived = (existingStock.total_received || 0) + completedProduct.quantity;
-            
-            // Calculate new average price
-            const totalExistingValue = existingStock.quantity * (existingStock.average_price || existingStock.price || 0);
-            const newItemValue = completedProduct.quantity * completedProduct.price;
-            const newAveragePrice = newQuantity > 0 ? 
-                (totalExistingValue + newItemValue) / newQuantity : 0;
-            
-            stockOperation = supabase
+            // Check if completed product already exists in stock
+            const { data: existingStockByBarcode, error: barcodeError } = await supabase
                 .from('stocks')
-                .update({
-                    quantity: newQuantity,
-                    total_received: newTotalReceived,
-                    average_price: newAveragePrice,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', existingStock.id);
-            
-            toast.success('Product quantity updated in stock!');
-        } else {
-            // Product doesn't exist, insert new
-            completedProduct.average_price = completedProduct.price;
-            completedProduct.total_received = completedProduct.quantity;
-            
-            stockOperation = supabase
-                .from('stocks')
-                .insert([completedProduct])
-                .select();
-            
-            toast.success('New product added to stock!');
-        }
+                .select('*')
+                .eq('bare_code', completedProduct.bare_code)
+                .single();
 
-        // Execute stock operation
-        if (stockOperation) {
-            const { data: stockResult, error: stockOpError } = await stockOperation;
-            if (stockOpError) throw stockOpError;
-            
-            // Also create a variant for the new product
-            if (!existingStock) {
-                await supabase
-                    .from('stock_variants')
-                    .insert([{
-                        stock_id: stockResult[0].id,
-                        bare_code: completedProduct.bare_code,
-                        serial_no: completedProduct.s_no,
-                        lot_no: completedProduct.lot_no,
-                        batch_no: completedProduct.lot_no || `BATCH-${Date.now()}`,
-                        price: completedProduct.price,
-                        quantity: completedProduct.quantity,
-                        pending_testing: 0,
-                        using_quantity: 0,
-                        received_date: new Date().toISOString().split('T')[0],
-                        testing_status: 'completed'
-                    }]);
+            const { data: existingStockByPartNo, error: partNoError } = await supabase
+                .from('stocks')
+                .select('*')
+                .eq('part_no', completedProduct.part_no)
+                .single();
+
+            let existingStock = existingStockByBarcode || existingStockByPartNo;
+            let stockOperation;
+
+            if (existingStock) {
+                // Product exists, update quantity with decimal support
+                const newQuantity = parseFloat(existingStock.quantity) + parseFloat(completedProduct.quantity);
+                const newTotalReceived = parseFloat(existingStock.total_received || 0) + parseFloat(completedProduct.quantity);
+                
+                // Calculate new average price
+                const totalExistingValue = parseFloat(existingStock.quantity) * parseFloat(existingStock.average_price || existingStock.price || 0);
+                const newItemValue = parseFloat(completedProduct.quantity) * parseFloat(completedProduct.price);
+                const newAveragePrice = newQuantity > 0 ? 
+                    (totalExistingValue + newItemValue) / newQuantity : 0;
+                
+                stockOperation = supabase
+                    .from('stocks')
+                    .update({
+                        quantity: newQuantity,
+                        total_received: newTotalReceived,
+                        average_price: newAveragePrice,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingStock.id);
+                
+                toast.success('Product quantity updated in stock!');
+            } else {
+                // Product doesn't exist, insert new
+                completedProduct.average_price = parseFloat(completedProduct.price);
+                completedProduct.total_received = parseFloat(completedProduct.quantity);
+                
+                stockOperation = supabase
+                    .from('stocks')
+                    .insert([completedProduct])
+                    .select();
+                
+                toast.success('New product added to stock!');
             }
+
+            // Execute stock operation
+            if (stockOperation) {
+                const { data: stockResult, error: stockOpError } = await stockOperation;
+                if (stockOpError) throw stockOpError;
+                
+                // Also create a variant for the new product
+                if (!existingStock) {
+                    await supabase
+                        .from('stock_variants')
+                        .insert([{
+                            stock_id: stockResult[0].id,
+                            bare_code: completedProduct.bare_code,
+                            serial_no: completedProduct.s_no,
+                            lot_no: completedProduct.lot_no,
+                            batch_no: completedProduct.lot_no || `BATCH-${Date.now()}`,
+                            price: parseFloat(completedProduct.price),
+                            quantity: parseFloat(completedProduct.quantity),
+                            pending_testing: 0,
+                            using_quantity: 0,
+                            received_date: new Date().toISOString().split('T')[0],
+                            testing_status: 'completed'
+                        }]);
+                }
+            }
+
+            // 6. Clean up BMR data
+            await supabase
+                .from('bmr_template_data')
+                .delete()
+                .eq('template_id', completedBMR.id);
+
+            await supabase
+                .from('processes')
+                .delete()
+                .eq('template_id', completedBMR.id);
+
+            // 7. Update BMR status to complete
+            await updateBMRStatus(completedBMR.id, 'complete', completedBMR.productId, completedBMR.assemblyId);
+
+            // 8. Reset and close modal
+            setShowCompletionModal(false);
+            setCompletedBMR(null);
+            setNewCompletedProduct({
+                BareCode: "",
+                PartNo: "",
+                LotNo: "",
+                SNo: "",
+                name: "",
+                price: "",
+                Quantity: "1.00"
+            });
+
+            // 9. Reload all data
+            await loadAllData();
+            
+            toast.success(`BMR completed successfully! Product added to stock at price: ₹${totalPrice.toFixed(2)}`);
+        } catch (error) {
+            console.error('Error completing BMR:', error);
+            toast.error('Error completing BMR: ' + error.message);
         }
+    };
 
-        // 6. Clean up BMR data
-        await supabase
-            .from('bmr_template_data')
-            .delete()
-            .eq('template_id', completedBMR.id);
-
-        await supabase
-            .from('processes')
-            .delete()
-            .eq('template_id', completedBMR.id);
-
-        // 7. Update BMR status to complete
-        await updateBMRStatus(completedBMR.id, 'complete', completedBMR.productId, completedBMR.assemblyId);
-
-        // 8. Reset and close modal
-        setShowCompletionModal(false);
-        setCompletedBMR(null);
-        setNewCompletedProduct({
-            BareCode: "",
-            PartNo: "",
-            LotNo: "",
-            SNo: "",
-            name: "",
-            price: "",
-            Quantity: 1
-        });
-
-        // 9. Reload all data
-        await loadAllData();
-        
-        toast.success(`BMR completed successfully! Product added to stock at price: ₹${totalPrice.toFixed(2)}`);
-    } catch (error) {
-        console.error('Error completing BMR:', error);
-        toast.error('Error completing BMR: ' + error.message);
-    }
-};
     // Multiple Handlers Functions
     const openMultipleHandlersModal = (process) => {
         setSelectedProcessForMultipleHandlers(process);
@@ -3042,7 +3065,7 @@ const handleCompleteBMR = async () => {
                             </thead>
                             <tbody>
                                 ${templateData.map((item, index) => {
-                                    const total = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+                                    const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                     return `
                                         <tr>
                                             <td>${index + 1}</td>
@@ -3050,7 +3073,7 @@ const handleCompleteBMR = async () => {
                                             <td>${item.partNo || ''}</td>
                                             <td>${item.internalSerialNo || ''}</td>
                                             <td>${item.description || ''}</td>
-                                            <td>${item.quantity || 1}</td>
+                                            <td>${parseFloat(item.quantity || 1).toFixed(2)}</td>
                                             <td>₹${parseFloat(item.price || 0).toFixed(2)}</td>
                                             <td>₹${total.toFixed(2)}</td>
                                             <td>${item.issuedBy || ''}</td>
@@ -3063,7 +3086,7 @@ const handleCompleteBMR = async () => {
                         <div class="summary">
                             <p><strong>Total Items:</strong> ${templateData.length}</p>
                             <p><strong>Grand Total:</strong> ₹${templateData.reduce((sum, item) => {
-                                return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+                                return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                             }, 0).toFixed(2)}</p>
                         </div>
                     ` : `
@@ -3226,7 +3249,7 @@ const handleCompleteBMR = async () => {
         }
     };
 
-    // Modified BMR Template Table with multiple barcodes support
+    // Modified BMR Template Table with decimal quantity support
     const renderBMRTemplateTable = () => {
         return (
             <div className="mb-4">
@@ -3260,15 +3283,17 @@ const handleCompleteBMR = async () => {
                                 let variantDetails = [];
                                 if (product.variantDetails) {
                                     try {
-                                        variantDetails = JSON.parse(product.variantDetails);
+                                        variantDetails = typeof product.variantDetails === 'string' 
+                                            ? JSON.parse(product.variantDetails) 
+                                            : product.variantDetails;
                                     } catch (e) {
                                         console.error('Error parsing variant details:', e);
                                     }
                                 }
                                 
-                                const totalQuantity = parseInt(product.quantity) || 1;
-                                const totalPrice = parseFloat(product.totalPrice) || (parseFloat(product.price) || 0) * totalQuantity;
-                                const averagePrice = totalQuantity > 0 ? totalPrice / totalQuantity : 0;
+                                const totalQuantity = parseFloat(product.totalQuantity) || parseFloat(product.quantity) || 1.00;
+                                const averagePrice = parseFloat(product.averagePrice) || parseFloat(product.price) || 0;
+                                const totalPrice = totalQuantity * averagePrice;
 
                                 return (
                                     <tr key={product.id}>
@@ -3309,7 +3334,7 @@ const handleCompleteBMR = async () => {
                                                             <div className="mt-1">
                                                                 {variantDetails.map((variant, idx) => (
                                                                     <span key={idx} className="badge bg-info me-1">
-                                                                        {variant.barcode}: {variant.qty} × ₹{variant.price}
+                                                                        {variant.barcode}: {parseFloat(variant.qty || 1).toFixed(2)} × ₹{parseFloat(variant.price || 0).toFixed(2)}
                                                                     </span>
                                                                 ))}
                                                             </div>
@@ -3329,20 +3354,36 @@ const handleCompleteBMR = async () => {
                                         </td>
                                         <td>
                                             <input
-                                                type="number"
-                                                className="form-control form-control-sm"
-                                                value={product.quantity || 1}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'quantity', parseInt(e.target.value) || 1, selectedProduct.id, selectedMainAssembly.id)}
-                                                min="1"
+                                                type="text"
+                                                className="form-control form-control-sm decimal-input"
+                                                value={totalQuantity.toFixed(2)}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                                                    const parts = value.split('.');
+                                                    if (parts.length <= 2) {
+                                                        updateBMRTemplateProduct(selectedBMR.id, index, 'totalQuantity', value, selectedProduct.id, selectedMainAssembly.id);
+                                                    }
+                                                }}
+                                                placeholder="0.00"
+                                                pattern="[0-9]*\.?[0-9]{0,2}"
+                                                title="Enter decimal quantity (e.g., 2.5)"
                                             />
                                         </td>
                                         <td>
                                             <input
-                                                type="number"
-                                                className="form-control form-control-sm"
+                                                type="text"
+                                                className="form-control form-control-sm decimal-input"
                                                 value={averagePrice.toFixed(2)}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'price', parseFloat(e.target.value) || 0, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Average Price"
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                                                    const parts = value.split('.');
+                                                    if (parts.length <= 2) {
+                                                        updateBMRTemplateProduct(selectedBMR.id, index, 'averagePrice', value, selectedProduct.id, selectedMainAssembly.id);
+                                                    }
+                                                }}
+                                                placeholder="0.00"
+                                                pattern="[0-9]*\.?[0-9]{0,2}"
+                                                title="Enter average price"
                                                 step="0.01"
                                             />
                                         </td>
@@ -3758,7 +3799,7 @@ const handleCompleteBMR = async () => {
                     {/* Add Global Template Button */}
                     {renderGlobalTemplateButtons()}
 
-                    {/* BMR Template Table - Modified to accept multiple barcodes */}
+                    {/* BMR Template Table - Modified to support decimal quantities */}
                     {renderBMRTemplateTable()}
                 </div>
             )}
@@ -3902,7 +3943,7 @@ const handleCompleteBMR = async () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Add Process to Template - REMOVED PRICE FIELD */}
+                                                    {/* Add Process to Template */}
                                                     <div className="col-md-12">
                                                         <div className="card mb-3">
                                                             <div className="card-header">
@@ -5126,7 +5167,7 @@ const handleCompleteBMR = async () => {
                                                                     </span>
                                                                 </td>
                                                                 <td>{item.description || 'N/A'}</td>
-                                                                <td>{item.quantity || 1}</td>
+                                                                <td>{parseFloat(item.quantity || 1).toFixed(2)}</td>
                                                                 <td>₹{item.price || 0}</td>
                                                                 <td>
                                                                     <span className={`badge ${item.issuedBy ? 'bg-primary' : 'bg-secondary'}`}>
@@ -5373,7 +5414,7 @@ const handleCompleteBMR = async () => {
                                             </thead>
                                             <tbody>
                                                 {selectedHistoryItem.template_data.map((item, index) => {
-                                                    const total = (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+                                                    const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                                     return (
                                                         <tr key={index}>
                                                             <td>{index + 1}</td>
@@ -5381,7 +5422,7 @@ const handleCompleteBMR = async () => {
                                                             <td>{item.partNo || ''}</td>
                                                             <td>{item.internalSerialNo || ''}</td>
                                                             <td>{item.description || ''}</td>
-                                                            <td>{item.quantity || 1}</td>
+                                                            <td>{parseFloat(item.quantity || 1).toFixed(2)}</td>
                                                             <td>₹{parseFloat(item.price || 0).toFixed(2)}</td>
                                                             <td>₹{total.toFixed(2)}</td>
                                                             <td>{item.issuedBy || ''}</td>
@@ -5480,7 +5521,7 @@ const handleCompleteBMR = async () => {
                 </div>
             )}
 
-            {/* Completion Modal */}
+            {/* Completion Modal with decimal support */}
             {showCompletionModal && (
                 <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-lg">
@@ -5505,7 +5546,7 @@ const handleCompleteBMR = async () => {
                                             <div className="col-md-6">
                                                 <p><strong>Template Items Total:</strong> 
                                                     ₹{completedBMR?.templateData?.reduce((sum, item) => {
-                                                        return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+                                                        return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                                     }, 0).toFixed(2) || '0.00'}
                                                 </p>
                                             </div>
@@ -5528,7 +5569,7 @@ const handleCompleteBMR = async () => {
                                                     <h6 className="mb-1">Total Product Price:</h6>
                                                     <h4 className="mb-0">
                                                         ₹{(completedBMR?.templateData?.reduce((sum, item) => {
-                                                            return sum + (parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1);
+                                                            return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                                         }, 0) + getBMRProcesses(completedBMR?.id).reduce((sum, process) => {
                                                             let processCost = 0;
                                                             if (process.handlers && process.handlers.length > 0) {
@@ -5610,12 +5651,19 @@ const handleCompleteBMR = async () => {
                                     <div className="col-md-4">
                                         <div className="form-floating mb-3">
                                             <input
-                                                type="number"
-                                                className="form-control"
+                                                type="text"
+                                                className="form-control decimal-input"
                                                 placeholder="Quantity"
                                                 value={newCompletedProduct.Quantity}
-                                                onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, Quantity: parseInt(e.target.value) || 1 }))}
-                                                min="1"
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                                                    const parts = value.split('.');
+                                                    if (parts.length <= 2) {
+                                                        setNewCompletedProduct(prev => ({ ...prev, Quantity: value }));
+                                                    }
+                                                }}
+                                                pattern="[0-9]*\.?[0-9]{0,2}"
+                                                title="Enter decimal quantity (e.g., 2.5)"
                                             />
                                             <label>Quantity *</label>
                                         </div>
@@ -5775,4 +5823,3 @@ const handleCompleteBMR = async () => {
 }
 
 export default BMR;
-

@@ -74,3 +74,10 @@ button:focus-visible {
   border-radius: 10px;
   
 }
+.modal-backdrop{
+width:auto;
+height: auto;
+}
+.modal{
+  background-color: #16080862;
+}

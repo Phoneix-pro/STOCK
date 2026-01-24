@@ -7,7 +7,7 @@ import NAV from './components/Nav'
 import Sales from './page/Sales'
 import Inward from './page/Inward'
 import BMR from './page/BMR'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { supabase } from './supabaseClient'
 
@@ -27,47 +27,34 @@ function App() {
   const [activeProductionDepartment, setActiveProductionDepartment] = useState('')
   const [loading, setLoading] = useState(true)
 
-  // Load all data from Supabase
+  // Load all data from Supabase on initial load only
   useEffect(() => {
     loadAllData()
   }, [])
 
-  const loadAllData = async () => {
+  // Optimized loadAllData that loads only necessary data
+  const loadAllData = useCallback(async () => {
     try {
       setLoading(true)
       
-      // Load stocks with new structure
-      await loadStocks()
+      // Load essential data in parallel where possible
+      await Promise.all([
+        loadStocks(),
+        loadProductionDepartments(),
+        loadSales(),
+        loadInwardInvoices()
+      ])
       
-      // Load production departments
-      await loadProductionDepartments()
-      
-      // Load production items with unique products
-      await loadProductionItems()
-      
-      // Load sales with unique products
-      await loadSales()
-      
-      // Load BMR templates
-      await loadBMRTemplates()
-      
-      // Load process templates
-      await loadProcessTemplates()
-      
-      // Load global templates
-      await loadGlobalTemplates()
-      
-      // Load invoices
-      await loadInvoices()
-      
-      // Load delivery chalans
-      await loadDeliveryChalans()
-      
-      // Load inward invoices
-      await loadInwardInvoices()
-      
-      // Load stock variants
-      await loadStockVariants()
+      // Load other data that depends on the above
+      await Promise.all([
+        loadProductionItems(),
+        loadBMRTemplates(),
+        loadProcessTemplates(),
+        loadGlobalTemplates(),
+        loadInvoices(),
+        loadDeliveryChalans(),
+        loadStockVariants()
+      ])
 
       // Load BMR list from localStorage
       await loadBMRList()
@@ -77,7 +64,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   // Load BMR list from localStorage
   const loadBMRList = async () => {
@@ -90,8 +77,9 @@ function App() {
       console.error('Error loading BMR list:', error)
     }
   }
-// In App.js, update the loadStocks function
-const loadStocks = async () => {
+
+  // Optimized loadStocks function
+  const loadStocks = useCallback(async () => {
     try {
         const { data: stocksData, error: stocksError } = await supabase
             .from('stocks')
@@ -112,12 +100,12 @@ const loadStocks = async () => {
                         console.error('Error loading variants for stock:', item.id, variantsError)
                     }
                     
-                    // Calculate totals from variants
+                    // Calculate totals from variants with decimal support
                     const totalFromVariants = variants?.reduce((sum, v) => {
                         return {
-                            quantity: sum.quantity + (v.quantity || 0),
-                            usingQuantity: sum.usingQuantity + (v.using_quantity || 0),
-                            testingBalance: sum.testingBalance + (v.pending_testing || 0)
+                            quantity: sum.quantity + (parseFloat(v.quantity) || 0),
+                            usingQuantity: sum.usingQuantity + (parseFloat(v.using_quantity) || 0),
+                            testingBalance: sum.testingBalance + (parseFloat(v.pending_testing) || 0)
                         }
                     }, { quantity: 0, usingQuantity: 0, testingBalance: 0 }) || 
                     { quantity: 0, usingQuantity: 0, testingBalance: 0 }
@@ -134,7 +122,7 @@ const loadStocks = async () => {
                         Quantity: totalFromVariants.quantity,
                         usingQuantity: totalFromVariants.usingQuantity,
                         testingBalance: totalFromVariants.testingBalance,
-                        totalReceived: item.total_received || 0,
+                        totalReceived: parseFloat(item.total_received) || 0,
                         variants: variants || [],
                         createdAt: item.created_at,
                         updatedAt: item.updated_at
@@ -147,9 +135,10 @@ const loadStocks = async () => {
     } catch (error) {
         console.error('Error loading stocks:', error)
     }
-}
+  }, [])
+
   // Load stock variants
-  const loadStockVariants = async () => {
+  const loadStockVariants = useCallback(async () => {
     try {
       const { data: variantsData, error: variantsError } = await supabase
         .from('stock_variants')
@@ -168,10 +157,10 @@ const loadStocks = async () => {
     } catch (error) {
       console.error('Error loading stock variants:', error)
     }
-  }
+  }, [])
 
   // Load production departments
-  const loadProductionDepartments = async () => {
+  const loadProductionDepartments = useCallback(async () => {
     try {
       const { data: departmentsData, error: departmentsError } = await supabase
         .from('production_departments')
@@ -184,132 +173,136 @@ const loadStocks = async () => {
     } catch (error) {
       console.error('Error loading production departments:', error)
     }
-  }
+  }, [])
 
-// Update loadProductionItems in App.js
-const loadProductionItems = async () => {
-  try {
-    const { data: productionItemsData, error: productionItemsError } = await supabase
-      .from('production_items')
-      .select(`
-        *,
-        stocks (
-          bare_code,
-          part_no,
-          name,
-          price
-        ),
-        stock_variants!inner (
-          bare_code,
-          price,
-          quantity,
-          using_quantity
-        )
-      `)
-      .order('created_at', { ascending: false })
+  // Load production items
+  const loadProductionItems = useCallback(async () => {
+    try {
+      const { data: productionItemsData, error: productionItemsError } = await supabase
+        .from('production_items')
+        .select(`
+          *,
+          stocks (
+            bare_code,
+            part_no,
+            name,
+            price
+          ),
+          stock_variants!inner (
+            bare_code,
+            price,
+            quantity,
+            using_quantity
+          )
+        `)
+        .order('created_at', { ascending: false })
 
-    if (productionItemsError) throw productionItemsError
+      if (productionItemsError) throw productionItemsError
 
-    if (productionItemsData && productionItemsData.length > 0) {
-      const validItems = productionItemsData.map(item => ({
-        id: item.id,
-        BareCode: item.stock_variants?.bare_code || item.stocks?.bare_code || 'N/A',
-        PartNo: item.stocks?.part_no || 'N/A',
-        name: item.stocks?.name || 'Unknown Product',
-        price: parseFloat(item.stock_variants?.price) || parseFloat(item.stocks?.price) || 0, // Use variant price first
-        moveQuantity: item.move_quantity || 0,
-        moveDate: item.move_date,
-        moveTime: item.move_time,
-        department: item.department,
-        stockId: item.stock_id,
-        variantId: item.variant_id,
-        departmentId: item.department_id,
-        variantPrice: parseFloat(item.stock_variants?.price) || 0,
-        createdAt: item.created_at
-      }));
+      if (productionItemsData && productionItemsData.length > 0) {
+        const validItems = productionItemsData.map(item => ({
+          id: item.id,
+          BareCode: item.stock_variants?.bare_code || item.stocks?.bare_code || 'N/A',
+          PartNo: item.stocks?.part_no || 'N/A',
+          name: item.stocks?.name || 'Unknown Product',
+          price: parseFloat(item.stock_variants?.price) || parseFloat(item.stocks?.price) || 0,
+          moveQuantity: parseFloat(item.move_quantity) || 0,
+          moveDate: item.move_date,
+          moveTime: item.move_time,
+          department: item.department,
+          stockId: item.stock_id,
+          variantId: item.variant_id,
+          departmentId: item.department_id,
+          variantPrice: parseFloat(item.stock_variants?.price) || 0,
+          createdAt: item.created_at
+        }));
 
-      setProductionItems(validItems);
-    } else {
+        setProductionItems(validItems);
+      } else {
+        setProductionItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading production items:', error);
       setProductionItems([]);
     }
-  } catch (error) {
-    console.error('Error loading production items:', error);
-    setProductionItems([]);
-  }
-}
-const loadSales = async () => {
-  try {
-    const { data: salesData, error: salesError } = await supabase
-      .from('sales')
-      .select(`
-        *,
-        stock_variants!inner (
-          bare_code,
-          price,
-          quantity,
-          using_quantity,
-          stock_id
-        ),
-        stocks!inner (
-          part_no,
-          name,
-          price
-        )
-      `)
-      .order('created_at', { ascending: false })
+  }, [])
 
-    if (salesError) throw salesError
+  // Load sales
+  const loadSales = useCallback(async () => {
+    try {
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          stock_variants!inner (
+            bare_code,
+            price,
+            quantity,
+            using_quantity,
+            stock_id
+          ),
+          stocks!inner (
+            part_no,
+            name,
+            price
+          )
+        `)
+        .order('created_at', { ascending: false })
 
-    if (salesData && salesData.length > 0) {
-      // Group sales by variant_id
-      const salesByVariant = {};
-      
-      salesData.forEach(sale => {
-        const variantId = sale.variant_id;
+      if (salesError) throw salesError
+
+      if (salesData && salesData.length > 0) {
+        // Group sales by variant_id
+        const salesByVariant = {};
         
-        if (!salesByVariant[variantId]) {
-          salesByVariant[variantId] = {
-            ...sale,
-            totalQuantity: sale.move_quantity,
-            sales: [sale],
-            latestSale: sale
-          };
-        } else {
-          salesByVariant[variantId].totalQuantity += sale.move_quantity;
-          salesByVariant[variantId].sales.push(sale);
-          if (new Date(sale.created_at) > new Date(salesByVariant[variantId].latestSale.created_at)) {
-            salesByVariant[variantId].latestSale = sale;
+        salesData.forEach(sale => {
+          const variantId = sale.variant_id;
+          
+          if (!salesByVariant[variantId]) {
+            salesByVariant[variantId] = {
+              ...sale,
+              totalQuantity: parseFloat(sale.move_quantity),
+              sales: [sale],
+              latestSale: sale
+            };
+          } else {
+            salesByVariant[variantId].totalQuantity += parseFloat(sale.move_quantity);
+            salesByVariant[variantId].sales.push(sale);
+            if (new Date(sale.created_at) > new Date(salesByVariant[variantId].latestSale.created_at)) {
+              salesByVariant[variantId].latestSale = sale;
+            }
           }
-        }
-      });
+        });
 
-      const validSales = Object.values(salesByVariant).map(item => ({
-        id: item.latestSale.id,
-        BareCode: item.stock_variants?.bare_code || 'N/A',
-        PartNo: item.stocks?.part_no || 'N/A',
-        name: item.stocks?.name || 'Unknown Product',
-        price: parseFloat(item.stock_variants?.price) || parseFloat(item.stocks?.price) || 0, // Use variant price first
-        moveQuantity: item.totalQuantity,
-        saleDate: item.latestSale.sale_date,
-        saleTime: item.latestSale.sale_time,
-        stockId: item.latestSale.stock_id,
-        variantId: item.latestSale.variant_id,
-        variantPrice: parseFloat(item.stock_variants?.price) || 0,
-        allSaleRecords: item.sales,
-        isAggregated: item.sales.length > 1,
-        createdAt: item.latestSale.created_at
-      }));
+        const validSales = Object.values(salesByVariant).map(item => ({
+          id: item.latestSale.id,
+          BareCode: item.stock_variants?.bare_code || 'N/A',
+          PartNo: item.stocks?.part_no || 'N/A',
+          name: item.stocks?.name || 'Unknown Product',
+          price: parseFloat(item.stock_variants?.price) || parseFloat(item.stocks?.price) || 0,
+          moveQuantity: item.totalQuantity,
+          saleDate: item.latestSale.sale_date,
+          saleTime: item.latestSale.sale_time,
+          stockId: item.latestSale.stock_id,
+          variantId: item.latestSale.variant_id,
+          variantPrice: parseFloat(item.stock_variants?.price) || 0,
+          allSaleRecords: item.sales,
+          isAggregated: item.sales.length > 1,
+          createdAt: item.latestSale.created_at
+        }));
 
-      setSales(validSales);
-    } else {
+        setSales(validSales);
+      } else {
+        setSales([]);
+      }
+    } catch (error) {
+      console.error('Error loading sales:', error);
       setSales([]);
     }
-  } catch (error) {
-    console.error('Error loading sales:', error);
-    setSales([]);
-  }
-}
-  const loadGlobalTemplates = async () => {
+  }, [])
+
+  // Load global templates
+  const loadGlobalTemplates = useCallback(async () => {
     try {
       const { data: templatesData, error: templatesError } = await supabase
         .from('global_templates')
@@ -325,9 +318,10 @@ const loadSales = async () => {
       console.error('Error loading global templates:', error)
       setGlobalTemplates([])
     }
-  }
+  }, [])
 
-  const loadBMRTemplates = async () => {
+  // Load BMR templates
+  const loadBMRTemplates = useCallback(async () => {
     try {
       const { data: templatesData, error: templatesError } = await supabase
         .from('bmr_templates')
@@ -385,9 +379,10 @@ const loadSales = async () => {
       console.error('Error loading BMR templates:', error)
       setBmrTemplates([])
     }
-  }
+  }, [])
 
-  const loadProcessTemplates = async () => {
+  // Load process templates
+  const loadProcessTemplates = useCallback(async () => {
     try {
       const { data: templatesData, error: templatesError } = await supabase
         .from('process_templates')
@@ -403,9 +398,10 @@ const loadSales = async () => {
       console.error('Error loading process templates:', error)
       setProcessTemplates([])
     }
-  }
+  }, [])
 
-  const loadInvoices = async () => {
+  // Load invoices
+  const loadInvoices = useCallback(async () => {
     try {
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
@@ -421,9 +417,10 @@ const loadSales = async () => {
       console.error('Error loading invoices:', error)
       setInvoices([])
     }
-  }
+  }, [])
 
-  const loadDeliveryChalans = async () => {
+  // Load delivery chalans
+  const loadDeliveryChalans = useCallback(async () => {
     try {
       const { data: dcData, error: dcError } = await supabase
         .from('delivery_chalans')
@@ -439,9 +436,10 @@ const loadSales = async () => {
       console.error('Error loading delivery chalans:', error)
       setDeliveryChalans([])
     }
-  }
+  }, [])
 
-  const loadInwardInvoices = async () => {
+  // Load inward invoices
+  const loadInwardInvoices = useCallback(async () => {
     try {
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('inward_invoices')
@@ -457,10 +455,10 @@ const loadSales = async () => {
       console.error('Error loading inward invoices:', error)
       setInwardInvoices([])
     }
-  }
+  }, [])
 
   // Get product variants for a specific product
-  const getProductVariants = async (partNo) => {
+  const getProductVariants = useCallback(async (partNo) => {
     try {
       // First, find the stock for this part number
       const { data: stock, error: stockError } = await supabase
@@ -491,55 +489,101 @@ const loadSales = async () => {
       console.error('Error getting product variants:', error)
       return { stock: null, variants: [] }
     }
-  }
+  }, [])
 
-  // Calculate available quantity for a product (excluding using quantity)
-  const calculateAvailableQuantity = (product) => {
+  // Calculate available quantity for a product (excluding using quantity) with decimal support
+  const calculateAvailableQuantity = useCallback((product) => {
     return Math.max(0, 
-      (product.Quantity || 0) - 
-      (product.usingQuantity || 0)
+      (parseFloat(product.Quantity) || 0) - 
+      (parseFloat(product.usingQuantity) || 0)
     );
-  };
+  }, [])
 
-  // Calculate total testing balance
-  const calculateTotalTestingBalance = () => {
-    return products.reduce((sum, product) => sum + (product.testingBalance || 0), 0)
-  }
+  // Calculate total testing balance with decimal support
+  const calculateTotalTestingBalance = useCallback(() => {
+    return products.reduce((sum, product) => sum + (parseFloat(product.testingBalance) || 0), 0)
+  }, [products])
 
-  // Calculate total value
-  const calculateTotalValue = () => {
+  // Calculate total value with decimal support
+  const calculateTotalValue = useCallback(() => {
     return products.reduce((sum, product) => {
-      const price = product.averagePrice || product.price || 0
-      return sum + ((product.Quantity || 0) * price)
+      const price = parseFloat(product.averagePrice) || parseFloat(product.price) || 0
+      return sum + ((parseFloat(product.Quantity) || 0) * price)
     }, 0)
-  }
+  }, [products])
 
-  // Calculate total in use value
-  const calculateTotalInUseValue = () => {
+  // Calculate total in use value with decimal support
+  const calculateTotalInUseValue = useCallback(() => {
     return products.reduce((sum, product) => {
-      const price = product.averagePrice || product.price || 0
-      return sum + ((product.usingQuantity || 0) * price)
+      const price = parseFloat(product.averagePrice) || parseFloat(product.price) || 0
+      return sum + ((parseFloat(product.usingQuantity) || 0) * price)
     }, 0)
-  }
+  }, [products])
 
-  // Calculate total pending testing value
-  const calculateTotalTestingValue = () => {
+  // Calculate total pending testing value with decimal support
+  const calculateTotalTestingValue = useCallback(() => {
     return products.reduce((sum, product) => {
-      const price = product.averagePrice || product.price || 0
-      return sum + ((product.testingBalance || 0) * price)
+      const price = parseFloat(product.averagePrice) || parseFloat(product.price) || 0
+      return sum + ((parseFloat(product.testingBalance) || 0) * price)
     }, 0)
-  }
+  }, [products])
 
   // Update BMR list
-  const updateBMRList = (newBmrList) => {
+  const updateBMRList = useCallback((newBmrList) => {
     setBmrList(newBmrList)
     localStorage.setItem('bmrList', JSON.stringify(newBmrList))
-  }
+  }, [])
+
+  // Function to reload only specific data modules (used by child components)
+  const reloadModuleData = useCallback(async (moduleName) => {
+    try {
+      switch (moduleName) {
+        case 'stocks':
+          await loadStocks();
+          await loadStockVariants();
+          break;
+        case 'production':
+          await loadProductionItems();
+          await loadProductionDepartments();
+          break;
+        case 'sales':
+          await loadSales();
+          await loadInvoices();
+          await loadDeliveryChalans();
+          break;
+        case 'inward':
+          await loadInwardInvoices();
+          await loadStocks(); // Stocks need to be updated too for inward
+          break;
+        case 'bmr':
+          await loadBMRTemplates();
+          break;
+        case 'all':
+          await loadAllData();
+          break;
+        default:
+          console.warn(`Unknown module: ${moduleName}`);
+      }
+    } catch (error) {
+      console.error(`Error reloading ${moduleName}:`, error);
+    }
+  }, [
+    loadStocks, 
+    loadStockVariants, 
+    loadProductionItems, 
+    loadProductionDepartments, 
+    loadSales, 
+    loadInvoices, 
+    loadDeliveryChalans, 
+    loadInwardInvoices, 
+    loadBMRTemplates, 
+    loadAllData
+  ])
 
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-        <div className="spinner-border text-primary" role="status">
+        <div className="spinner-border text-success" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
         <div className="ms-3">Loading Application...</div>
@@ -575,6 +619,7 @@ const loadSales = async () => {
             sales={sales}
             setSales={setSales}
             loadAllData={loadAllData}
+            reloadModuleData={reloadModuleData}
             bmrTemplates={bmrTemplates}
             bmrList={bmrList}
             setBmrList={updateBMRList}
@@ -598,6 +643,7 @@ const loadSales = async () => {
             activeProductionDepartment={activeProductionDepartment}
             setActiveProductionDepartment={setActiveProductionDepartment}
             loadAllData={loadAllData}
+            reloadModuleData={reloadModuleData}
             getProductVariants={getProductVariants}
           />
         }/>
@@ -608,6 +654,7 @@ const loadSales = async () => {
             products={products}
             setProducts={setProducts}
             loadAllData={loadAllData}
+            reloadModuleData={reloadModuleData}
             invoices={invoices}
             setInvoices={setInvoices}
             deliveryChalans={deliveryChalans}
@@ -627,6 +674,7 @@ const loadSales = async () => {
             setGlobalTemplates={setGlobalTemplates}
             activeProductionDepartment={activeProductionDepartment}
             loadAllData={loadAllData}
+            reloadModuleData={reloadModuleData}
             products={products}
             setProducts={setProducts}
             getProductVariants={getProductVariants}
@@ -639,6 +687,7 @@ const loadSales = async () => {
             products={products}
             setProducts={setProducts}
             loadAllData={loadAllData}
+            reloadModuleData={reloadModuleData}
             getProductVariants={getProductVariants}
           />
         }/>

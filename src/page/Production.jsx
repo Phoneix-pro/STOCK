@@ -274,16 +274,63 @@ function Production({
   // Handle move back quantity change
   const handleMoveBackQuantityChange = (itemId, quantity) => {
     const item = productionItems.find(item => item.id === itemId);
-    const maxQuantity = item.moveQuantity;
+    const maxQuantity = parseFloat(item.moveQuantity);
     setMoveBackQuantity(prev => ({
       ...prev,
-      [itemId]: Math.min(Math.max(1, quantity), maxQuantity)
+      [itemId]: Math.min(Math.max(0.01, parseFloat(quantity)), maxQuantity)
     }));
   }
 
-  // In Production.js, update the moveItemBackToStock function
+  // Optimized function to load only production data
+  const loadProductionDataOnly = async () => {
+    try {
+      const { data: productionItemsData, error: productionItemsError } = await supabase
+        .from('production_items')
+        .select(`
+          *,
+          stocks (
+            bare_code,
+            part_no,
+            name,
+            price
+          ),
+          stock_variants!inner (
+            bare_code,
+            price,
+            quantity,
+            using_quantity
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (!productionItemsError && productionItemsData) {
+        const validItems = productionItemsData.map(item => ({
+          id: item.id,
+          BareCode: item.stock_variants?.bare_code || item.stocks?.bare_code || 'N/A',
+          PartNo: item.stocks?.part_no || 'N/A',
+          name: item.stocks?.name || 'Unknown Product',
+          price: parseFloat(item.stock_variants?.price) || parseFloat(item.stocks?.price) || 0,
+          moveQuantity: parseFloat(item.move_quantity) || 0,
+          moveDate: item.move_date,
+          moveTime: item.move_time,
+          department: item.department,
+          stockId: item.stock_id,
+          variantId: item.variant_id,
+          departmentId: item.department_id,
+          variantPrice: parseFloat(item.stock_variants?.price) || 0,
+          createdAt: item.created_at
+        }));
+
+        setProductionItems(validItems);
+      }
+    } catch (error) {
+      console.error('Error loading production items:', error);
+    }
+  }
+
+  // Move item back to stock with decimal support
   const moveItemBackToStock = async (item) => {
-    const quantityToMove = moveBackQuantity[item.id] || item.moveQuantity;
+    const quantityToMove = parseFloat(moveBackQuantity[item.id]) || parseFloat(item.moveQuantity)
 
     try {
       setLoading('moveBack', true)
@@ -297,22 +344,22 @@ function Production({
 
       if (variantError) throw variantError
 
-      // FIXED: Move from using_quantity back to available quantity
-      const currentUsingQty = variant.using_quantity || 0
+      // Move from using_quantity back to available quantity with decimal support
+      const currentUsingQty = parseFloat(variant.using_quantity) || 0
       if (currentUsingQty < quantityToMove) {
-        toast.error(`Cannot move back ${quantityToMove}. Only ${currentUsingQty} in use.`)
+        toast.error(`Cannot move back ${quantityToMove.toFixed(2)}. Only ${currentUsingQty.toFixed(2)} in use.`)
         return
       }
       
       const newVariantUsing = Math.max(0, currentUsingQty - quantityToMove)
-      const newVariantQty = (variant.quantity || 0) + quantityToMove
+      const newVariantQty = (parseFloat(variant.quantity) || 0) + quantityToMove
 
-      // Update variant quantities
+      // Update variant quantities with decimal support
       const { error: updateVariantError } = await supabase
         .from('stock_variants')
         .update({
-          using_quantity: newVariantUsing,
-          quantity: newVariantQty,
+          using_quantity: parseFloat(newVariantUsing.toFixed(2)),
+          quantity: parseFloat(newVariantQty.toFixed(2)),
           updated_at: new Date().toISOString()
         })
         .eq('id', variant.id)
@@ -326,12 +373,12 @@ function Production({
           variant_id: variant.id,
           movement_type: 'in',
           quantity: quantityToMove,
-          remaining_quantity: newVariantQty,
+          remaining_quantity: parseFloat(newVariantQty.toFixed(2)),
           reference_type: 'production_return',
           movement_date: new Date().toISOString()
         }])
 
-      // Update stock totals
+      // Update stock totals with decimal support
       const { data: stock, error: stockError } = await supabase
         .from('stocks')
         .select('quantity, using_quantity')
@@ -339,21 +386,21 @@ function Production({
         .single()
 
       if (!stockError) {
-        const currentStockUsing = stock.using_quantity || 0
+        const currentStockUsing = parseFloat(stock.using_quantity) || 0
         const newStockUsing = Math.max(0, currentStockUsing - quantityToMove)
-        const newStockQty = (stock.quantity || 0) + quantityToMove
+        const newStockQty = (parseFloat(stock.quantity) || 0) + quantityToMove
 
         await supabase
           .from('stocks')
           .update({
-            using_quantity: newStockUsing,
-            quantity: newStockQty,
+            using_quantity: parseFloat(newStockUsing.toFixed(2)),
+            quantity: parseFloat(newStockQty.toFixed(2)),
             updated_at: new Date().toISOString()
           })
           .eq('id', variant.stock_id)
       }
 
-      if (quantityToMove === item.moveQuantity) {
+      if (quantityToMove === parseFloat(item.moveQuantity)) {
         // Delete if all items moved back
         const { error: deleteError } = await supabase
           .from('production_items')
@@ -362,11 +409,11 @@ function Production({
 
         if (deleteError) throw deleteError
       } else {
-        // Update quantity if partial move
+        // Update quantity if partial move with decimal support
         const { error: updateItemError } = await supabase
           .from('production_items')
           .update({
-            move_quantity: item.moveQuantity - quantityToMove,
+            move_quantity: parseFloat((parseFloat(item.moveQuantity) - quantityToMove).toFixed(2)),
             updated_at: new Date().toISOString()
           })
           .eq('id', item.id)
@@ -374,14 +421,16 @@ function Production({
         if (updateItemError) throw updateItemError
       }
 
-      toast.success(`Moved ${quantityToMove} ${item.name} back to stock`)
+      toast.success(`Moved ${quantityToMove.toFixed(2)} ${item.name} back to stock`)
       setMoveBackQuantity(prev => {
         const newState = { ...prev }
         delete newState[item.id]
         return newState
       })
       setSelectedItemForMove(null)
-      await loadAllData()
+      
+      // Optimized reload - only reload production data
+      await loadProductionDataOnly()
       
       // Close modal
       if (moveBackModalRef.current) {
@@ -437,23 +486,25 @@ function Production({
             )
             
             if (existingProductIndex !== -1) {
-              // Update existing product quantity
+              // Update existing product quantity (increase by 0.1 if empty, otherwise use existing)
               const updatedProducts = [...scannedBMRProducts]
-              const currentMoveQty = updatedProducts[existingProductIndex].bmrMoveQuantity || 1
+              const currentMoveQty = updatedProducts[existingProductIndex].bmrMoveQuantity || ''
               
-              if (currentMoveQty < availableQty) {
+              if (currentMoveQty === '') {
                 updatedProducts[existingProductIndex] = {
                   ...updatedProducts[existingProductIndex],
-                  bmrMoveQuantity: currentMoveQty + 1,
+                  bmrMoveQuantity: '0.1', // Start with 0.1 if empty
                   variantData: variant
                 }
                 setScannedBMRProducts(updatedProducts)
-                toast.success(`Increased quantity for ${foundProduct.name}`)
+                toast.success(`Set quantity for ${foundProduct.name} to 0.1`)
               } else {
-                toast.error(`Cannot add more. Only ${availableQty} available for ${foundProduct.name}`)
+                // If already has value, just update variant data
+                updatedProducts[existingProductIndex].variantData = variant
+                setScannedBMRProducts(updatedProducts)
               }
             } else {
-              // Add new product with variant details
+              // Add new product with variant details - EMPTY quantity by default
               setScannedBMRProducts(prev => [
                 ...prev,
                 {
@@ -461,12 +512,12 @@ function Production({
                   id: foundProduct.id,
                   variantId: variant.id,
                   variantData: variant,
-                  bmrMoveQuantity: 1,
+                  bmrMoveQuantity: '', // EMPTY BY DEFAULT
                   originalQuantity: foundProduct.moveQuantity,
                   availableQuantity: availableQty
                 }
               ])
-              toast.success(`Added to BMR: ${foundProduct.name}`)
+              toast.success(`Added to BMR: ${foundProduct.name} - Please enter quantity`)
             }
           } catch (error) {
             console.error('Error fetching variant details:', error)
@@ -506,17 +557,37 @@ function Production({
     setUsingBackCameraBMR(prev => !prev)
   }
 
-  const handleBMRQuantityChange = (productId, newQuantity) => {
+  // FIXED: Updated BMR quantity change handler - allows empty, decimal, and proper editing
+  const handleBMRQuantityChange = (productId, value) => {
+    // Allow empty string or 0
+    if (value === '' || value === '0' || value === '0.') {
+      setScannedBMRProducts(prev => 
+        prev.map(product => 
+          product.id === productId 
+            ? { ...product, bmrMoveQuantity: value }
+            : product
+        )
+      )
+      return
+    }
+    
+    // Parse as float
+    const parsedValue = parseFloat(value)
+    if (isNaN(parsedValue) || parsedValue < 0) return
+    
+    // Get the product to check max available quantity
+    const product = scannedBMRProducts.find(p => p.id === productId)
+    const maxQuantity = product ? product.moveQuantity : 0
+    
+    // Limit to available quantity
+    const validQuantity = Math.min(parsedValue, maxQuantity)
+    
     setScannedBMRProducts(prev => 
-      prev.map(product => {
-        const availableQty = product.moveQuantity;
-        return product.id === productId 
-          ? { 
-              ...product, 
-              bmrMoveQuantity: Math.min(Math.max(1, newQuantity), availableQty) 
-            }
+      prev.map(product => 
+        product.id === productId 
+          ? { ...product, bmrMoveQuantity: validQuantity.toString() }
           : product
-      })
+      )
     )
   }
 
@@ -571,18 +642,19 @@ function Production({
             
             if (existingProductIndex !== -1) {
               const updatedProducts = [...scannedBMRProducts]
-              const currentMoveQty = updatedProducts[existingProductIndex].bmrMoveQuantity || 1
+              const currentMoveQty = updatedProducts[existingProductIndex].bmrMoveQuantity || ''
               
-              if (currentMoveQty < availableQty) {
+              if (currentMoveQty === '') {
                 updatedProducts[existingProductIndex] = {
                   ...updatedProducts[existingProductIndex],
-                  bmrMoveQuantity: currentMoveQty + 1,
+                  bmrMoveQuantity: '0.1', // Start with 0.1 if empty
                   variantData: variant
                 }
                 setScannedBMRProducts(updatedProducts)
-                toast.success(`Increased quantity for ${foundProduct.name}`)
+                toast.success(`Set quantity for ${foundProduct.name} to 0.1`)
               } else {
-                toast.error(`Cannot add more. Only ${availableQty} available for ${foundProduct.name}`)
+                updatedProducts[existingProductIndex].variantData = variant
+                setScannedBMRProducts(updatedProducts)
               }
             } else {
               setScannedBMRProducts(prev => [
@@ -592,12 +664,12 @@ function Production({
                   id: foundProduct.id,
                   variantId: variant.id,
                   variantData: variant,
-                  bmrMoveQuantity: 1,
+                  bmrMoveQuantity: '', // EMPTY BY DEFAULT
                   originalQuantity: foundProduct.moveQuantity,
                   availableQuantity: availableQty
                 }
               ])
-              toast.success(`Added to BMR: ${foundProduct.name}`)
+              toast.success(`Added to BMR: ${foundProduct.name} - Please enter quantity`)
             }
             setManualBarcodeInput('')
           } catch (error) {
@@ -635,17 +707,17 @@ function Production({
       
       if (matchingProducts.length > 0) {
         // Calculate totals for multiple barcodes
-        const totalQuantity = matchingProducts.reduce((sum, p) => sum + (p.bmrMoveQuantity || 1), 0);
+        const totalQuantity = matchingProducts.reduce((sum, p) => sum + (parseFloat(p.bmrMoveQuantity) || 0), 0);
         const barcodes = matchingProducts.map(p => p.BareCode).join(', ');
         const variantDetails = matchingProducts.map(p => ({ 
           barcode: p.BareCode, 
           price: p.price || 0, 
-          qty: p.bmrMoveQuantity || 1,
+          qty: parseFloat(p.bmrMoveQuantity) || 0,
           variantId: p.variantId
         }));
         const totalPrice = matchingProducts.reduce((sum, p) => {
           const price = p.price || 0;
-          const qty = p.bmrMoveQuantity || 1;
+          const qty = parseFloat(p.bmrMoveQuantity) || 0;
           return sum + (price * qty);
         }, 0);
         const averagePrice = totalQuantity > 0 ? totalPrice / totalQuantity : 0;
@@ -723,6 +795,13 @@ function Production({
       return
     }
 
+    // Check if all products have quantity entered
+    const productsWithoutQuantity = scannedBMRProducts.filter(p => !p.bmrMoveQuantity || parseFloat(p.bmrMoveQuantity) <= 0)
+    if (productsWithoutQuantity.length > 0) {
+      toast.error(`Please enter quantity for ${productsWithoutQuantity.length} product(s)!`)
+      return
+    }
+
     if (!bmrId) {
       toast.error('Please select a BMR!')
       return
@@ -758,17 +837,17 @@ function Production({
         const firstProduct = products[0];
         
         // Calculate totals for multiple barcodes
-        const totalQuantity = products.reduce((sum, p) => sum + (p.bmrMoveQuantity || 1), 0);
+        const totalQuantity = products.reduce((sum, p) => sum + (parseFloat(p.bmrMoveQuantity) || 0), 0);
         const barcodes = products.map(p => p.BareCode).join(', ');
         const variantDetails = products.map(p => ({ 
           barcode: p.BareCode, 
           price: p.price || 0, 
-          qty: p.bmrMoveQuantity || 1,
+          qty: parseFloat(p.bmrMoveQuantity) || 0,
           variantId: p.variantId
         }));
         const totalPrice = products.reduce((sum, p) => {
           const price = p.price || 0;
-          const qty = p.bmrMoveQuantity || 1;
+          const qty = parseFloat(p.bmrMoveQuantity) || 0;
           return sum + (price * qty);
         }, 0);
         const averagePrice = totalQuantity > 0 ? totalPrice / totalQuantity : 0;
@@ -794,7 +873,8 @@ function Production({
       
       // Update production items (remove or reduce quantity from move_quantity)
       for (const scannedProduct of scannedBMRProducts) {
-        const newMoveQuantity = scannedProduct.moveQuantity - (scannedProduct.bmrMoveQuantity || 1);
+        const moveQty = parseFloat(scannedProduct.bmrMoveQuantity) || 0
+        const newMoveQuantity = scannedProduct.moveQuantity - moveQty;
         
         if (newMoveQuantity <= 0) {
           // Delete production item completely
@@ -954,7 +1034,7 @@ function Production({
                     <td>{item.name}</td>
                     <td>₹{item.price}</td>
                     <td>
-                      <span className="badge bg-info">{item.moveQuantity}</span>
+                      <span className="badge bg-info">{item.moveQuantity.toFixed(2)}</span>
                     </td>
                     <td>{item.moveDate}</td>
                     <td>{item.moveTime}</td>
@@ -1095,7 +1175,7 @@ function Production({
                 <>
                   <div className="mb-3">
                     <p><strong>Product:</strong> {selectedItemForMove.name}</p>
-                    <p><strong>Available Quantity:</strong> {selectedItemForMove.moveQuantity}</p>
+                    <p><strong>Available Quantity:</strong> {selectedItemForMove.moveQuantity.toFixed(2)}</p>
                     <p><strong>Barcode:</strong> {selectedItemForMove.BareCode}</p>
                   </div>
                   <div className="form-floating mb-3">
@@ -1103,10 +1183,11 @@ function Production({
                       type="number"
                       className="form-control"
                       placeholder="Quantity to move back"
-                      min="1"
+                      min="0.01"
+                      step="0.01"
                       max={selectedItemForMove.moveQuantity}
                       value={moveBackQuantity[selectedItemForMove.id] || selectedItemForMove.moveQuantity}
-                      onChange={(e) => handleMoveBackQuantityChange(selectedItemForMove.id, parseInt(e.target.value) || 1)}
+                      onChange={(e) => handleMoveBackQuantityChange(selectedItemForMove.id, parseFloat(e.target.value) || 0.01)}
                     />
                     <label>Quantity to move back to stock</label>
                   </div>
@@ -1142,7 +1223,7 @@ function Production({
         </div>
       </div>
     
-      {/* Move to BMR Modal with Multiple Barcode Support */}
+      {/* Move to BMR Modal with FIXED Quantity Inputs */}
       <div className="modal fade" id="Move" tabIndex="-1" aria-labelledby="bmr" aria-hidden="true" ref={moveToBMRModalRef}>
         <div className="modal-dialog modal-xl">
           <div className="modal-content">
@@ -1259,7 +1340,7 @@ function Production({
                     )}
                   </div>
 
-                  {/* BMR Products Preview with Multiple Barcodes */}
+                  {/* BMR Products Preview with FIXED Quantity Input */}
                   <div className="preview">
                     <h5>Products for BMR {scannedBMRProducts.length > 0 && `(${scannedBMRProducts.length} products)`}</h5>
                     
@@ -1295,33 +1376,25 @@ function Production({
                                   <span className="badge bg-secondary">{product.PartNo}</span>
                                 </td>
                                 <td>
-                                  <span className="badge bg-info">{product.moveQuantity}</span>
+                                  <span className="badge bg-info">{product.moveQuantity.toFixed(2)}</span>
                                 </td>
                                 <td>
-                                  <div className="d-flex align-items-center gap-2">
-                                    <button
-                                      className="btn btn-sm btn-outline-secondary"
-                                      onClick={() => handleBMRQuantityChange(product.id, (product.bmrMoveQuantity || 1) - 1)}
-                                      disabled={(product.bmrMoveQuantity || 1) <= 1}
-                                    >
-                                      -
-                                    </button>
+                                  {/* FIXED: Single input field - No +- buttons, empty by default, allows decimals */}
+                                  <div className="d-flex align-items-center">
                                     <input
                                       type="number"
-                                      className="form-control form-control-sm text-center"
-                                      style={{ width: '70px' }}
-                                      min="1"
-                                      max={product.moveQuantity}
-                                      value={product.bmrMoveQuantity || 1}
-                                      onChange={(e) => handleBMRQuantityChange(product.id, parseInt(e.target.value) || 1)}
+                                      className="form-control form-control-sm"
+                                      style={{ width: '120px' }}
+                                      min="0"
+                                      step="0.01"
+                                      placeholder="Enter Qty"
+                                      value={product.bmrMoveQuantity || ''}
+                                      onChange={(e) => handleBMRQuantityChange(product.id, e.target.value)}
+                                      onFocus={(e) => e.target.select()}
                                     />
-                                    <button
-                                      className="btn btn-sm btn-outline-secondary"
-                                      onClick={() => handleBMRQuantityChange(product.id, (product.bmrMoveQuantity || 1) + 1)}
-                                      disabled={(product.bmrMoveQuantity || 1) >= product.moveQuantity}
-                                    >
-                                      +
-                                    </button>
+                                    <small className="ms-2 text-muted">
+                                      Max: {product.moveQuantity.toFixed(2)}
+                                    </small>
                                   </div>
                                 </td>
                                 <td>
@@ -1405,10 +1478,10 @@ function Production({
                               acc[product.PartNo].push(product);
                               return acc;
                             }, {})).map(([partNo, products], index) => {
-                              const totalQuantity = products.reduce((sum, p) => sum + (p.bmrMoveQuantity || 1), 0);
+                              const totalQuantity = products.reduce((sum, p) => sum + (parseFloat(p.bmrMoveQuantity) || 0), 0);
                               const totalPrice = products.reduce((sum, p) => {
                                 const price = p.price || 0;
-                                const qty = p.bmrMoveQuantity || 1;
+                                const qty = parseFloat(p.bmrMoveQuantity) || 0;
                                 return sum + (price * qty);
                               }, 0);
                               const averagePrice = totalQuantity > 0 ? totalPrice / totalQuantity : 0;
@@ -1423,13 +1496,13 @@ function Production({
                                       {products.map((product, idx) => (
                                         <div key={idx} className="small">
                                           <span className="badge bg-info me-1">{product.BareCode}</span>
-                                          (Qty: {product.bmrMoveQuantity || 1}, ₹{product.price || 0})
+                                          (Qty: {product.bmrMoveQuantity || 0}, ₹{product.price || 0})
                                         </div>
                                       ))}
                                     </div>
                                   </td>
                                   <td>
-                                    <span className="badge bg-primary">{totalQuantity}</span>
+                                    <span className="badge bg-primary">{totalQuantity.toFixed(2)}</span>
                                   </td>
                                   <td>₹{averagePrice.toFixed(2)}</td>
                                   <td>₹{totalPrice.toFixed(2)}</td>
