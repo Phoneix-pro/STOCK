@@ -40,6 +40,13 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         finalizeInvoice: false
     })
 
+    // Confirmation modal states
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [invoiceToDelete, setInvoiceToDelete] = useState(null)
+    const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false)
+    const [invoiceToFinalize, setInvoiceToFinalize] = useState(null)
+    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
+
     // Filter invoices based on search
     const filteredInvoices = inwardInvoices.filter(invoice =>
         invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -123,7 +130,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             isNew: true
         }
         
-        // Insert duplicate after the original item
         const updatedItems = [...invoiceItems]
         updatedItems.splice(index + 1, 0, newItem)
         setInvoiceItems(updatedItems)
@@ -134,16 +140,10 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
     const updateInvoiceItem = (index, field, value) => {
         const updatedItems = [...invoiceItems]
         
-        // Handle decimal inputs for quantity and price fields
         if (field === 'quantity' || field === 'price' || field === 'completed_qty') {
-            // Remove non-numeric characters except decimal point
             let sanitizedValue = value.replace(/[^0-9.]/g, '')
-            // Ensure only one decimal point
             const parts = sanitizedValue.split('.')
-            if (parts.length > 2) {
-                return
-            }
-            // Limit to 2 decimal places
+            if (parts.length > 2) return
             if (parts[1] && parts[1].length > 2) {
                 sanitizedValue = parts[0] + '.' + parts[1].substring(0, 2)
             }
@@ -155,13 +155,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             [field]: value
         }
 
-        // Auto-calculate total price with decimal support
         if (field === 'quantity' || field === 'price') {
             const quantity = parseFloat(updatedItems[index].quantity) || 0
             const price = parseFloat(updatedItems[index].price) || 0
             updatedItems[index].total_price = parseFloat((quantity * price).toFixed(2))
             
-            // Set pending testing to quantity
             if (field === 'quantity') {
                 updatedItems[index].pending_testing = quantity
                 updatedItems[index].completed_testing = 0
@@ -169,7 +167,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             }
         }
 
-        // Auto-fill product name if barcode matches
         if (field === 'bare_code' && value.trim()) {
             const product = products.find(p => p.BareCode === value.trim())
             if (product) {
@@ -180,7 +177,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             }
         }
 
-        // Auto-fill part no and product name if part no is entered
         if (field === 'part_no' && value.trim()) {
             const product = products.find(p => p.PartNo === value.trim())
             if (product) {
@@ -218,12 +214,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         }
     }
 
-    // Save invoice to database with decimal support
+    // Save invoice to database
     const saveInvoice = async () => {
         try {
             setLoadingStates(prev => ({ ...prev, saveInvoice: true }))
 
-            // Validation
             if (!newInvoice.invoice_number.trim()) {
                 toast.error("Invoice number is required!")
                 return
@@ -234,7 +229,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 return
             }
 
-            // Validate all items with decimal support
             for (const item of invoiceItems) {
                 if (!item.bare_code.trim()) {
                     toast.error(`Item ${invoiceItems.indexOf(item) + 1}: Barcode is required!`)
@@ -256,7 +250,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 }
             }
 
-            // Check for duplicate barcodes within the same invoice
             const barcodeSet = new Set()
             for (const item of invoiceItems) {
                 if (barcodeSet.has(item.bare_code.trim())) {
@@ -266,7 +259,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 barcodeSet.add(item.bare_code.trim())
             }
 
-            // Check if invoice number already exists (for new invoices)
             if (!editingInvoice) {
                 const { data: existingInvoice, error } = await supabase
                     .from('inward_invoices')
@@ -280,15 +272,12 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 }
             }
 
-            // Calculate invoice total with decimal support
             const invoiceTotal = invoiceItems.reduce((total, item) => {
                 return total + (parseFloat(item.total_price) || 0)
             }, 0)
 
-            // Start transaction - save invoice first
             let invoiceId
             if (editingInvoice) {
-                // Update existing invoice
                 const { error } = await supabase
                     .from('inward_invoices')
                     .update({
@@ -310,13 +299,11 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 if (error) throw error
                 invoiceId = editingInvoice.id
 
-                // Get existing items to check for stock variants
                 const { data: existingItems } = await supabase
                     .from('inward_items')
                     .select('id, bare_code')
                     .eq('invoice_id', invoiceId)
 
-                // Delete only the items that are no longer in the new list
                 const existingBarcodes = existingItems?.map(item => item.bare_code) || []
                 const newBarcodes = invoiceItems.map(item => item.bare_code.trim())
                 const barcodesToDelete = existingBarcodes.filter(barcode => !newBarcodes.includes(barcode))
@@ -329,7 +316,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                         .in('bare_code', barcodesToDelete)
                 }
             } else {
-                // Create new invoice
                 const { data, error } = await supabase
                     .from('inward_invoices')
                     .insert([{
@@ -351,9 +337,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 invoiceId = data[0].id
             }
 
-            // Process each item with decimal support
             for (const item of invoiceItems) {
-                // Check if item already exists (for updates)
                 const { data: existingItem } = await supabase
                     .from('inward_items')
                     .select('id')
@@ -385,19 +369,16 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 }
 
                 if (existingItem && !item.isNew) {
-                    // Update existing item
                     await supabase
                         .from('inward_items')
                         .update(itemData)
                         .eq('id', existingItem.id)
                 } else {
-                    // Insert new item
                     await supabase
                         .from('inward_items')
                         .insert([itemData])
                 }
 
-                // Check if stock variant already exists for this barcode
                 const { data: existingVariant } = await supabase
                     .from('stock_variants')
                     .select('id')
@@ -405,9 +386,7 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     .maybeSingle()
 
                 if (!existingVariant) {
-                    // Process stock variant creation with decimal support
                     if (item.part_no.trim() && item.bare_code.trim()) {
-                        // Check if stock exists with this part_no
                         const { data: existingStock, error: stockError } = await supabase
                             .from('stocks')
                             .select('*')
@@ -415,11 +394,9 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                             .single()
 
                         if (!stockError && existingStock) {
-                            // Update existing stock with decimal support
                             const newTotalReceived = (parseFloat(existingStock.total_received) || 0) + quantity
                             const newTestingBalance = (parseFloat(existingStock.testing_balance) || 0) + quantity
                             
-                            // Calculate weighted average price
                             const totalExistingValue = (parseFloat(existingStock.quantity) || 0) * (parseFloat(existingStock.average_price) || 0)
                             const newItemValue = quantity * price
                             const totalNewQuantity = (parseFloat(existingStock.quantity) || 0) + quantity
@@ -436,7 +413,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 })
                                 .eq('id', existingStock.id)
 
-                            // Add stock variant only if it doesn't exist
                             const { data: newVariant, error: variantError } = await supabase
                                 .from('stock_variants')
                                 .insert([{
@@ -459,7 +435,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 throw variantError
                             }
 
-                            // Record stock movement
                             if (!variantError || variantError.message.includes('duplicate key')) {
                                 await supabase
                                     .from('stock_movements')
@@ -475,7 +450,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                             }
 
                         } else {
-                            // Create new stock with decimal support
                             const { data: newStock, error: newStockError } = await supabase
                                 .from('stocks')
                                 .insert([{
@@ -496,7 +470,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
                             if (newStockError) throw newStockError
 
-                            // Add stock variant
                             const { data: newVariant, error: variantError } = await supabase
                                 .from('stock_variants')
                                 .insert([{
@@ -519,7 +492,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 throw variantError
                             }
 
-                            // Record stock movement
                             await supabase
                                 .from('stock_movements')
                                 .insert([{
@@ -553,7 +525,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             setInvoiceItems([])
             setEditingInvoice(null)
             
-            // Reload only inward data
             await loadInwardDataOnly()
         } catch (error) {
             console.error('Error saving invoice:', error)
@@ -609,7 +580,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
             const newCompleted = (parseFloat(selectedItem.completed_testing) || 0) + completedTesting
             const newStatus = newPending === 0 ? 'completed' : 'pending'
 
-            // Update inward item
             const { error: updateError } = await supabase
                 .from('inward_items')
                 .update({
@@ -624,7 +594,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
             if (updateError) throw updateError
 
-            // Find the stock variant for this item
             const { data: variant, error: variantError } = await supabase
                 .from('stock_variants')
                 .select('*')
@@ -632,7 +601,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 .single()
 
             if (!variantError && variant) {
-                // Update variant: move from pending_testing to quantity with decimal support
                 const newVariantPending = Math.max(0, (parseFloat(variant.pending_testing) || 0) - completedTesting)
                 const newVariantQty = (parseFloat(variant.quantity) || 0) + completedTesting
                 const newVariantStatus = newVariantPending === 0 ? 'completed' : 'pending'
@@ -647,7 +615,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     })
                     .eq('id', variant.id)
 
-                // Record stock movement for testing completion
                 await supabase
                     .from('stock_movements')
                     .insert([{
@@ -660,7 +627,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                         movement_date: new Date().toISOString()
                     }])
 
-                // Update stock - Only update specific fields
                 const { data: stock, error: stockError } = await supabase
                     .from('stocks')
                     .select('*')
@@ -668,7 +634,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     .single()
 
                 if (!stockError && stock) {
-                    // Update stock testing balance and quantity with decimal support
                     const newTestingBalance = Math.max(0, (parseFloat(stock.testing_balance) || 0) - completedTesting)
                     const newQuantity = (parseFloat(stock.quantity) || 0) + completedTesting
 
@@ -685,7 +650,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
             toast.success(`Updated testing: ${completedTesting.toFixed(2)} completed, ${newPending.toFixed(2)} pending`)
             
-            // Update local state without reloading entire application
             if (viewingInvoice) {
                 const updatedItems = viewingInvoice.items.map(i => 
                     i.id === selectedItem.id ? { 
@@ -700,13 +664,10 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 setViewingInvoice({ ...viewingInvoice, items: updatedItems })
             }
 
-            // Close modal
             closeTestingModal()
 
-            // Refresh only the necessary data
             const refreshInvoiceData = async () => {
                 try {
-                    // Only refresh the specific invoice data
                     const { data: updatedInvoice } = await supabase
                         .from('inward_invoices')
                         .select('*')
@@ -805,36 +766,38 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         }
     }
 
-    // Delete invoice
-    const deleteInvoice = async (invoiceId) => {
-        const invoiceToDelete = inwardInvoices.find(inv => inv.id === invoiceId);
-        
-        if (!invoiceToDelete) {
-            toast.error("Invoice not found!");
-            return;
+    // Show delete confirmation
+    const confirmDeleteInvoice = (invoiceId) => {
+        const invoice = inwardInvoices.find(inv => inv.id === invoiceId)
+        if (!invoice) {
+            toast.error("Invoice not found!")
+            return
         }
         
-        if (invoiceToDelete.status !== 'draft') {
-            toast.error("Only draft invoices can be deleted!");
-            return;
+        if (invoice.status !== 'draft') {
+            toast.error("Only draft invoices can be deleted!")
+            return
         }
+        
+        setInvoiceToDelete(invoice)
+        setShowDeleteConfirm(true)
+    }
 
-        if (!window.confirm('Are you sure you want to delete this invoice? This will also remove all items and testing quantities.')) return
+    // Delete invoice after confirmation
+    const deleteInvoice = async () => {
+        if (!invoiceToDelete) return
 
         try {
             setLoadingStates(prev => ({ ...prev, deleteInvoice: true }))
 
-            // Get invoice items first to update stock
             const { data: items, error: itemsError } = await supabase
                 .from('inward_items')
                 .select('*')
-                .eq('invoice_id', invoiceId)
+                .eq('invoice_id', invoiceToDelete.id)
 
             if (itemsError) throw itemsError
 
-            // Reduce testing quantities in stock and delete variants
             for (const item of items || []) {
-                // Find and delete stock variant
                 const { data: variants, error: variantsError } = await supabase
                     .from('stock_variants')
                     .select('*')
@@ -842,7 +805,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
                 if (!variantsError && variants && variants.length > 0) {
                     for (const variant of variants) {
-                        // Update stock before deleting variant
                         const { data: stock, error: stockError } = await supabase
                             .from('stocks')
                             .select('*')
@@ -866,7 +828,6 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 .eq('id', stock.id)
                         }
 
-                        // Delete variant
                         await supabase
                             .from('stock_variants')
                             .delete()
@@ -875,21 +836,22 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 }
             }
 
-            // Delete the invoice (cascade will delete items)
             const { error } = await supabase
                 .from('inward_invoices')
                 .delete()
-                .eq('id', invoiceId)
+                .eq('id', invoiceToDelete.id)
 
             if (error) throw error
 
             toast.success('Invoice deleted successfully!')
             await loadAllData()
             
-            // Close viewing modal if open
-            if (viewingInvoice && viewingInvoice.id === invoiceId) {
-                setViewingInvoice(null);
+            if (viewingInvoice && viewingInvoice.id === invoiceToDelete.id) {
+                setViewingInvoice(null)
             }
+            
+            setShowDeleteConfirm(false)
+            setInvoiceToDelete(null)
         } catch (error) {
             console.error('Error deleting invoice:', error)
             toast.error('Error deleting invoice: ' + error.message)
@@ -898,16 +860,29 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         }
     }
 
-    // Finalize invoice
-    const finalizeInvoice = async (invoiceId) => {
+    // Show finalize confirmation
+    const confirmFinalizeInvoice = (invoiceId) => {
+        const invoice = inwardInvoices.find(inv => inv.id === invoiceId)
+        if (!invoice) {
+            toast.error("Invoice not found!")
+            return
+        }
+        
+        setInvoiceToFinalize(invoice)
+        setShowFinalizeConfirm(true)
+    }
+
+    // Finalize invoice after confirmation
+    const finalizeInvoice = async () => {
+        if (!invoiceToFinalize) return
+
         try {
             setLoadingStates(prev => ({ ...prev, finalizeInvoice: true }))
             
-            // Check if all items are completed
             const { data: items, error: itemsError } = await supabase
                 .from('inward_items')
                 .select('testing_status, pending_testing')
-                .eq('invoice_id', invoiceId)
+                .eq('invoice_id', invoiceToFinalize.id)
 
             if (itemsError) throw itemsError
 
@@ -926,18 +901,16 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                     status: 'completed',
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', invoiceId)
+                .eq('id', invoiceToFinalize.id)
 
             if (error) throw error
 
             toast.success('Invoice finalized successfully!')
             
-            // Update local state
-            if (viewingInvoice && viewingInvoice.id === invoiceId) {
+            if (viewingInvoice && viewingInvoice.id === invoiceToFinalize.id) {
                 setViewingInvoice({ ...viewingInvoice, status: 'completed' })
             }
 
-            // Refresh invoice list
             const { data: updatedInvoices } = await supabase
                 .from('inward_invoices')
                 .select('*')
@@ -947,6 +920,9 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                 setInwardInvoices(updatedInvoices)
             }
             
+            setShowFinalizeConfirm(false)
+            setInvoiceToFinalize(null)
+            
         } catch (error) {
             console.error('Error finalizing invoice:', error)
             toast.error('Error finalizing invoice: ' + error.message)
@@ -955,108 +931,187 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
         }
     }
 
+    // Show discard confirmation
+    const confirmDiscardChanges = () => {
+        if (invoiceItems.length > 0 || 
+            newInvoice.supplier_name.trim() || 
+            newInvoice.received_by.trim()) {
+            setShowDiscardConfirm(true)
+        } else {
+            setShowInvoiceModal(false)
+            setEditingInvoice(null)
+        }
+    }
+
+    // Discard changes after confirmation
+    const discardChanges = () => {
+        setShowInvoiceModal(false)
+        setShowDiscardConfirm(false)
+        setNewInvoice({
+            invoice_number: "",
+            invoice_date: new Date(),
+            received_by: "",
+            received_date: new Date(),
+            supplier_name: "",
+            supplier_address: "",
+            phone_number: "",
+            gst_number: "",
+            notes: "",
+            status: "draft"
+        })
+        setInvoiceItems([])
+        setEditingInvoice(null)
+    }
+
     return (
-        <div className="container">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h1 className="text-primary">Inward / Invoice Management</h1>
-                <button className="btn btn-success" onClick={openNewInvoiceModal}>
+        <div className="container-fluid px-lg-5 px-md-3 px-2 py-3">
+            {/* Header Section */}
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+                <div className="mb-3 mb-md-0">
+                    <h1 className="text-primary fw-bold">
+                        <i className="fas fa-inbox me-2"></i>
+                        Inward Management
+                    </h1>
+                    <p className="text-muted mb-0">Manage incoming invoices and inventory</p>
+                </div>
+                <button 
+                    className="btn btn-success btn-lg shadow-sm"
+                    onClick={openNewInvoiceModal}
+                >
                     <i className="fa-solid fa-plus me-2"></i>
                     New Invoice
                 </button>
             </div>
 
             {/* Search Bar */}
-            <div className="input-group mb-4">
-                <span className="input-group-text">
-                    <i className="fa-solid fa-magnifying-glass"></i>
-                </span>
-                <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Search by Invoice Number, Supplier, Status..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="card shadow-sm border-0 mb-4">
+                <div className="card-body p-3">
+                    <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-light border-0">
+                            <i className="fa-solid fa-magnifying-glass text-muted"></i>
+                        </span>
+                        <input
+                            type="text"
+                            className="form-control border-0 bg-light"
+                            placeholder="Search invoices by number, supplier, or status..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <button 
+                            className="btn btn-outline-secondary border-0"
+                            onClick={() => setSearchTerm("")}
+                        >
+                            <i className="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Invoices List */}
-            <div className="card">
-                <div className="card-header">
-                    <h5 className="card-title mb-0">
-                        <i className="fa-solid fa-list me-2"></i>
-                        Invoices
-                        <span className="badge bg-primary ms-2">{filteredInvoices.length}</span>
-                    </h5>
+            {/* Invoices List Card */}
+            <div className="card shadow border-0">
+                <div className="card-header bg-white border-0 py-3">
+                    <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                        <h5 className="card-title fw-bold mb-2 mb-md-0">
+                            <i className="fa-solid fa-file-invoice me-2 text-primary"></i>
+                            Invoices
+                            <span className="badge bg-primary ms-2">{filteredInvoices.length}</span>
+                        </h5>
+                        <div className="text-muted">
+                            Showing {filteredInvoices.length} of {inwardInvoices.length} invoices
+                        </div>
+                    </div>
                 </div>
-                <div className="card-body">
+                <div className="card-body p-0">
                     {filteredInvoices.length === 0 ? (
                         <div className="text-center py-5">
-                            <i className="fa-solid fa-file-invoice fa-3x text-muted mb-3"></i>
-                            <h5 className="text-muted">No invoices found</h5>
-                            <p className="text-muted">Create your first invoice to get started</p>
-                            <button className="btn btn-success" onClick={openNewInvoiceModal}>
+                            <i className="fa-solid fa-file-invoice fa-4x text-light mb-3" style={{color: '#e9ecef'}}></i>
+                            <h5 className="text-muted mb-2">No invoices found</h5>
+                            <p className="text-muted mb-4">Create your first invoice to get started</p>
+                            <button className="btn btn-primary btn-lg" onClick={openNewInvoiceModal}>
                                 <i className="fa-solid fa-plus me-2"></i>
                                 Create First Invoice
                             </button>
                         </div>
                     ) : (
                         <div className="table-responsive">
-                            <table className="table table-striped table-hover">
-                                <thead>
+                            <table className="table table-hover mb-0">
+                                <thead className="table-light">
                                     <tr>
-                                        <th>#</th>
+                                        <th className="ps-4">#</th>
                                         <th>Invoice No</th>
                                         <th>Date</th>
                                         <th>Supplier</th>
                                         <th>Phone</th>
-                                        <th>GST</th>
                                         <th>Amount</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
+                                        <th className="text-center pe-4">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredInvoices.map((invoice, index) => (
-                                        <tr key={invoice.id}>
-                                            <td>{index + 1}</td>
+                                        <tr key={invoice.id} className="align-middle">
+                                            <td className="ps-4 fw-medium text-muted">{index + 1}</td>
                                             <td>
-                                                <strong>{invoice.invoice_number}</strong>
+                                                <div className="d-flex flex-column">
+                                                    <strong className="text-primary">{invoice.invoice_number}</strong>
+                                                    <small className="text-muted">{invoice.gst_number || 'No GST'}</small>
+                                                </div>
                                             </td>
-                                            <td>{invoice.invoice_date}</td>
-                                            <td>{invoice.supplier_name || 'N/A'}</td>
-                                            <td>{invoice.phone_number || 'N/A'}</td>
-                                            <td>{invoice.gst_number || 'N/A'}</td>
-                                            <td>₹{parseFloat(invoice.total_amount || 0).toFixed(2)}</td>
                                             <td>
-                                                <span className={`badge ${
+                                                <div className="d-flex flex-column">
+                                                    <span>{invoice.invoice_date}</span>
+                                                    <small className="text-muted">Received: {invoice.received_date}</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="d-flex flex-column">
+                                                    <strong>{invoice.supplier_name || 'N/A'}</strong>
+                                                    <small className="text-muted">{invoice.received_by}</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href={`tel:${invoice.phone_number}`} className="text-decoration-none">
+                                                    {invoice.phone_number || 'N/A'}
+                                                </a>
+                                            </td>
+                                            <td className="fw-bold">
+                                                ₹{parseFloat(invoice.total_amount || 0).toFixed(2)}
+                                            </td>
+                                            <td>
+                                                <span className={`badge rounded-pill px-3 py-2 ${
                                                     invoice.status === 'completed' ? 'bg-success' :
-                                                    invoice.status === 'draft' ? 'bg-warning' :
+                                                    invoice.status === 'draft' ? 'bg-warning text-dark' :
                                                     'bg-secondary'
                                                 }`}>
+                                                    <i className={`fas ${
+                                                        invoice.status === 'completed' ? 'fa-check-circle' :
+                                                        invoice.status === 'draft' ? 'fa-pen' :
+                                                        'fa-clock'
+                                                    } me-2`}></i>
                                                     {invoice.status}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <div className="btn-group btn-group-sm">
+                                            <td className="text-center pe-4">
+                                                <div className="btn-group" role="group">
                                                     <button
-                                                        className="btn btn-outline-primary"
+                                                        className="btn btn-outline-primary btn-sm rounded-start"
                                                         onClick={() => viewInvoice(invoice)}
-                                                        title="View Invoice"
+                                                        title="View Details"
                                                     >
                                                         <i className="fa-solid fa-eye"></i>
                                                     </button>
                                                     {invoice.status === 'draft' && (
                                                         <>
                                                             <button
-                                                                className="btn btn-outline-secondary"
+                                                                className="btn btn-outline-secondary btn-sm"
                                                                 onClick={() => editInvoice(invoice)}
                                                                 title="Edit Invoice"
                                                             >
                                                                 <i className="fa-solid fa-pen"></i>
                                                             </button>
                                                             <button
-                                                                className="btn btn-outline-danger"
-                                                                onClick={() => deleteInvoice(invoice.id)}
+                                                                className="btn btn-outline-danger btn-sm rounded-end"
+                                                                onClick={() => confirmDeleteInvoice(invoice.id)}
                                                                 title="Delete Invoice"
                                                                 disabled={loadingStates.deleteInvoice}
                                                             >
@@ -1081,289 +1136,323 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
             {/* New/Edit Invoice Modal */}
             {showInvoiceModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">
-                                    {editingInvoice ? 'Edit Invoice' : 'New Invoice'}
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-primary text-white py-3">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fa-solid fa-file-invoice me-2"></i>
+                                    {editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}
                                 </h5>
                                 <button 
                                     type="button" 
                                     className="btn-close btn-close-white" 
-                                    onClick={() => {
-                                        setShowInvoiceModal(false)
-                                        setEditingInvoice(null)
-                                    }}
+                                    onClick={confirmDiscardChanges}
                                 ></button>
                             </div>
-                            <div className="modal-body">
+                            <div className="modal-body p-4">
                                 {/* Invoice Header */}
-                                <div className="row mb-4">
-                                    <div className="col-md-6">
-                                        <div className="form-floating mb-3">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={newInvoice.invoice_number}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, invoice_number: e.target.value }))}
-                                                disabled={editingInvoice}
-                                            />
-                                            <label>Invoice Number *</label>
+                                <div className="border-0 bg-light mb-4">
+                                    <div className="card-body">
+                                        <h6 className="card-title text-primary mb-3">
+                                            <i className="fa-solid fa-info-circle me-2"></i>
+                                            Invoice Information
+                                        </h6>
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <div className="form-floating">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.invoice_number}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, invoice_number: e.target.value }))}
+                                                        disabled={editingInvoice}
+                                                    />
+                                                    <label className="text-muted">Invoice Number *</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div >
+                                                      <label className="form-label me-3">Invoice Date *</label>
+                                                    <DatePicker
+                                                        selected={newInvoice.invoice_date}
+                                                        onChange={(date) => setNewInvoice(prev => ({ ...prev, invoice_date: date }))}
+                                                        dateFormat="yyyy-MM-dd"
+                                                        className="form-control border-0 shadow-sm"
+                                                        placeholderText="Select invoice date"
+                                                        required
+                                                    />
+                                                  
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="form-floating">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.received_by}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, received_by: e.target.value }))}
+                                                    />
+                                                    <label className="text-muted">Received By *</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div>
+                                                     <label className="form-label me-3">Received Date *</label>
+                                                    <DatePicker
+                                                        selected={newInvoice.received_date}
+                                                        onChange={(date) => setNewInvoice(prev => ({ ...prev, received_date: date }))}
+                                                        dateFormat="yyyy-MM-dd"
+                                                        className="form-control border-0 shadow-sm"
+                                                        placeholderText="Select received date"
+                                                        required
+                                                    />
+                                                   
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="col-md-6">
-                                        <div className="mb-3">
-                                            <label className="me-2">Invoice Date *</label>
-                                            <DatePicker
-                                                selected={newInvoice.invoice_date}
-                                                onChange={(date) => setNewInvoice(prev => ({ ...prev, invoice_date: date }))}
-                                                dateFormat="yyyy-MM-dd"
-                                                className="form-control"
-                                                placeholderText="Select invoice date"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-floating mb-3">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={newInvoice.received_by}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, received_by: e.target.value }))}
-                                            />
-                                            <label>Received By *</label>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className=" mb-3">
-                                             <label className="me-2">Received Date *</label>
-                                            <DatePicker
-                                                selected={newInvoice.received_date}
-                                                onChange={(date) => setNewInvoice(prev => ({ ...prev, received_date: date }))}
-                                                dateFormat="yyyy-MM-dd"
-                                                className="form-control"
-                                                placeholderText="Select received date"
-                                                required
-                                            />
-                                           
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-floating mb-3">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={newInvoice.supplier_name}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, supplier_name: e.target.value }))}
-                                            />
-                                            <label>Supplier Name</label>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-floating mb-3">
-                                            <input
-                                                type="tel"
-                                                className="form-control"
-                                                value={newInvoice.phone_number}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, phone_number: e.target.value }))}
-                                                pattern="[0-9]{10}"
-                                                placeholder="10-digit phone number"
-                                            />
-                                            <label>Phone Number</label>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <div className="form-floating mb-3">
-                                            <input
-                                                type="text"
-                                                className="form-control"
-                                                value={newInvoice.gst_number}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, gst_number: e.target.value }))}
-                                                pattern="[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}"
-                                                placeholder="GSTIN format: 22AAAAA0000A1Z5"
-                                            />
-                                            <label>GST Number</label>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-12">
-                                        <div className="form-floating mb-3">
-                                            <textarea
-                                                className="form-control"
-                                                value={newInvoice.supplier_address}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, supplier_address: e.target.value }))}
-                                                style={{ height: '100px' }}
-                                            />
-                                            <label>Supplier Address</label>
-                                        </div>
-                                    </div>
-                                    <div className="col-md-12">
-                                        <div className="form-floating mb-3">
-                                            <textarea
-                                                className="form-control"
-                                                value={newInvoice.notes}
-                                                onChange={(e) => setNewInvoice(prev => ({ ...prev, notes: e.target.value }))}
-                                                style={{ height: '100px' }}
-                                            />
-                                            <label>Notes</label>
+                                </div>
+
+                                {/* Supplier Information */}
+                                <div className="card border-0 bg-light mb-4">
+                                    <div className="card-body">
+                                        <h6 className="card-title text-primary mb-3">
+                                            <i className="fa-solid fa-building me-2"></i>
+                                            Supplier Information
+                                        </h6>
+                                        <div className="row g-3">
+                                            <div className="col-md-6">
+                                                <div className="form-floating">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.supplier_name}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, supplier_name: e.target.value }))}
+                                                    />
+                                                    <label className="text-muted">Supplier Name</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="form-floating">
+                                                    <input
+                                                        type="tel"
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.phone_number}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, phone_number: e.target.value }))}
+                                                        pattern="[0-9]{10}"
+                                                    />
+                                                    <label className="text-muted">Phone Number</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="form-floating">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.gst_number}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, gst_number: e.target.value }))}
+                                                    />
+                                                    <label className="text-muted">GST Number</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <div className="form-floating">
+                                                    <textarea
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.supplier_address}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, supplier_address: e.target.value }))}
+                                                        style={{ height: '100px' }}
+                                                    />
+                                                    <label className="text-muted">Supplier Address</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <div className="form-floating">
+                                                    <textarea
+                                                        className="form-control border-0 shadow-sm"
+                                                        value={newInvoice.notes}
+                                                        onChange={(e) => setNewInvoice(prev => ({ ...prev, notes: e.target.value }))}
+                                                        style={{ height: '80px' }}
+                                                    />
+                                                    <label className="text-muted">Notes (Optional)</label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Invoice Items */}
-                                <div className="d-flex justify-content-between align-items-center mb-3">
-                                    <h5>Invoice Items</h5>
-                                    <button className="btn btn-sm btn-primary" onClick={addNewItem}>
-                                        <i className="fa-solid fa-plus me-2"></i>
-                                        Add Item
-                                    </button>
-                                </div>
+                                <div className="card border-0 bg-light">
+                                    <div className="card-body">
+                                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+                                            <div>
+                                                <h6 className="card-title text-primary mb-1">
+                                                    <i className="fa-solid fa-boxes me-2"></i>
+                                                    Invoice Items
+                                                </h6>
+                                                <p className="text-muted mb-0">Add products to this invoice</p>
+                                            </div>
+                                            <button 
+                                                className="btn btn-primary mt-2 mt-md-0"
+                                                onClick={addNewItem}
+                                            >
+                                                <i className="fa-solid fa-plus me-2"></i>
+                                                Add Item
+                                            </button>
+                                        </div>
 
-                                {invoiceItems.length === 0 ? (
-                                    <div className="alert alert-info text-center">
-                                        No items added. Click "Add Item" to start.
+                                        {invoiceItems.length === 0 ? (
+                                            <div className="text-center py-5 border rounded bg-white">
+                                                <i className="fa-solid fa-box-open fa-3x text-muted mb-3"></i>
+                                                <h6 className="text-muted">No items added yet</h6>
+                                                <p className="text-muted mb-0">Click "Add Item" to start adding products</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="table-responsive">
+                                                    <table className="table table-hover bg-white rounded shadow-sm">
+                                                        <thead className="table-light">
+                                                            <tr>
+                                                                <th width="40">#</th>
+                                                                <th>Barcode *</th>
+                                                                <th>Part No *</th>
+                                                                <th>Product Name</th>
+                                                                <th>Lot No</th>
+                                                                <th>Serial No</th>
+                                                                <th width="120">Quantity</th>
+                                                                <th width="120">Price (₹)</th>
+                                                                <th width="120">Total (₹)</th>
+                                                                <th width="100" className="text-center">Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {invoiceItems.map((item, index) => (
+                                                                <tr key={item.id || index} className="align-middle">
+                                                                    <td className="fw-medium text-muted">{index + 1}</td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border"
+                                                                            value={item.bare_code}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'bare_code', e.target.value)}
+                                                                            placeholder="Scan barcode"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border"
+                                                                            value={item.part_no}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'part_no', e.target.value)}
+                                                                            placeholder="Part No"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border"
+                                                                            value={item.product_name}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'product_name', e.target.value)}
+                                                                            placeholder="Product Name"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border"
+                                                                            value={item.lot_no}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'lot_no', e.target.value)}
+                                                                            placeholder="Lot No"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border"
+                                                                            value={item.serial_no}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'serial_no', e.target.value)}
+                                                                            placeholder="Serial No"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border text-end"
+                                                                            value={item.quantity}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)}
+                                                                            placeholder="Qty"
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm border text-end"
+                                                                            value={item.price}
+                                                                            onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)}
+                                                                            placeholder="Price"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="fw-bold text-end">
+                                                                        ₹{parseFloat(item.total_price || 0).toFixed(2)}
+                                                                    </td>
+                                                                    <td className="text-center">
+                                                                        <div className="btn-group btn-group-sm" role="group">
+                                                                            <button
+                                                                                className="btn btn-outline-success"
+                                                                                onClick={() => duplicateInvoiceItem(index)}
+                                                                                title="Duplicate"
+                                                                            >
+                                                                                <i className="fa-solid fa-copy"></i>
+                                                                            </button>
+                                                                            <button
+                                                                                className="btn btn-outline-danger"
+                                                                                onClick={() => removeInvoiceItem(index)}
+                                                                                title="Remove"
+                                                                            >
+                                                                                <i className="fa-solid fa-trash"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                        <tfoot className="table-light">
+                                                            <tr>
+                                                                <td colSpan="7" className="text-end fw-bold">
+                                                                    Grand Total:
+                                                                </td>
+                                                                <td colSpan="2" className="text-end">
+                                                                    <h4 className="text-primary mb-0">
+                                                                        ₹{calculateInvoiceTotal().toFixed(2)}
+                                                                    </h4>
+                                                                </td>
+                                                                <td></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                                <div className="alert alert-info mt-3 mb-0">
+                                                    <i className="fa-solid fa-info-circle me-2"></i>
+                                                    <strong>Tip:</strong> Scan barcode or enter Part No to auto-fill product details
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                ) : (
-                                    <div className="table-responsive">
-                                        <table className="table table-bordered">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>Barcode *</th>
-                                                    <th>Part No *</th>
-                                                    <th>Product Name</th>
-                                                    <th>Lot No</th>
-                                                    <th>Serial No</th>
-                                                    <th>Quantity</th>
-                                                    <th>Price (₹)</th>
-                                                    <th>Total (₹)</th>
-                                                    <th>Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {invoiceItems.map((item, index) => (
-                                                    <tr key={item.id || index}>
-                                                        <td>{index + 1}</td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.bare_code}
-                                                                onChange={(e) => updateInvoiceItem(index, 'bare_code', e.target.value)}
-                                                                placeholder="Scan or enter barcode"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.part_no}
-                                                                onChange={(e) => updateInvoiceItem(index, 'part_no', e.target.value)}
-                                                                placeholder="Part No"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.product_name}
-                                                                onChange={(e) => updateInvoiceItem(index, 'product_name', e.target.value)}
-                                                                placeholder="Product Name"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.lot_no}
-                                                                onChange={(e) => updateInvoiceItem(index, 'lot_no', e.target.value)}
-                                                                placeholder="Lot No"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.serial_no}
-                                                                onChange={(e) => updateInvoiceItem(index, 'serial_no', e.target.value)}
-                                                                placeholder="Serial No"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.quantity}
-                                                                onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)}
-                                                                pattern="[0-9]*\.?[0-9]{0,2}"
-                                                                title="Enter quantity (e.g., 2.5, 7.1)"
-                                                                placeholder="Quantity"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <input
-                                                                type="text"
-                                                                className="form-control form-control-sm"
-                                                                value={item.price}
-                                                                onChange={(e) => updateInvoiceItem(index, 'price', e.target.value)}
-                                                                pattern="[0-9]*\.?[0-9]{0,2}"
-                                                                title="Enter price (e.g., 10.50, 7.00)"
-                                                                placeholder="Price"
-                                                            />
-                                                        </td>
-                                                        <td>
-                                                            <strong>₹{parseFloat(item.total_price || 0).toFixed(2)}</strong>
-                                                        </td>
-                                                        <td>
-                                                            <div className="btn-group btn-group-sm">
-                                                                <button
-                                                                    className="btn btn-sm btn-outline-success"
-                                                                    onClick={() => duplicateInvoiceItem(index)}
-                                                                    title="Duplicate this row"
-                                                                >
-                                                                    <i className="fa-solid fa-copy"></i>
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-sm btn-outline-danger"
-                                                                    onClick={() => removeInvoiceItem(index)}
-                                                                    title="Remove this row"
-                                                                >
-                                                                    <i className="fa-solid fa-trash"></i>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr>
-                                                    <td colSpan="8" className="text-end">
-                                                        <strong>Grand Total:</strong>
-                                                    </td>
-                                                    <td colSpan="2">
-                                                        <h5 className="mb-0">₹{calculateInvoiceTotal().toFixed(2)}</h5>
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-                                )}
+                                </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-light border-top">
                                 <button 
                                     type="button" 
-                                    className="btn btn-secondary" 
-                                    onClick={() => {
-                                        setShowInvoiceModal(false)
-                                        setEditingInvoice(null)
-                                    }}
+                                    className="btn btn-outline-secondary"
+                                    onClick={confirmDiscardChanges}
                                 >
+                                    <i className="fa-solid fa-times me-2"></i>
                                     Cancel
                                 </button>
                                 <button 
                                     type="button" 
-                                    className="btn btn-primary"
+                                    className="btn btn-primary px-4"
                                     onClick={saveInvoice}
                                     disabled={loadingStates.saveInvoice || invoiceItems.length === 0}
                                 >
@@ -1387,12 +1476,14 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
             {/* View Invoice Modal */}
             {viewingInvoice && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header bg-info text-white">
-                                <h5 className="modal-title">
-                                    Invoice Details - {viewingInvoice.invoice_number}
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-info text-white py-3">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fa-solid fa-eye me-2"></i>
+                                    Invoice Details
+                                    <small className="ms-2 fw-normal">#{viewingInvoice.invoice_number}</small>
                                 </h5>
                                 <button 
                                     type="button" 
@@ -1400,161 +1491,225 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     onClick={() => setViewingInvoice(null)}
                                 ></button>
                             </div>
-                            <div className="modal-body">
-                                {/* Invoice Header Info */}
-                                <div className="card mb-4">
-                                    <div className="card-body">
-                                        <div className="row">
-                                            <div className="col-md-6">
-                                                <p><strong>Invoice Number:</strong> {viewingInvoice.invoice_number}</p>
-                                                <p><strong>Invoice Date:</strong> {viewingInvoice.invoice_date}</p>
-                                                <p><strong>Received By:</strong> {viewingInvoice.received_by}</p>
-                                                <p><strong>Received Date:</strong> {viewingInvoice.received_date}</p>
-                                                <p><strong>Phone:</strong> {viewingInvoice.phone_number || 'N/A'}</p>
-                                            </div>
-                                            <div className="col-md-6">
-                                                <p><strong>Supplier:</strong> {viewingInvoice.supplier_name || 'N/A'}</p>
-                                                <p><strong>GST Number:</strong> {viewingInvoice.gst_number || 'N/A'}</p>
-                                                <p><strong>Address:</strong> {viewingInvoice.supplier_address || 'N/A'}</p>
-                                                <p><strong>Status:</strong> 
-                                                    <span className={`badge ms-2 ${
-                                                        viewingInvoice.status === 'completed' ? 'bg-success' :
-                                                        viewingInvoice.status === 'draft' ? 'bg-warning' :
-                                                        'bg-secondary'
-                                                    }`}>
-                                                        {viewingInvoice.status}
-                                                    </span>
-                                                </p>
-                                                <p><strong>Total Amount:</strong> ₹{parseFloat(viewingInvoice.total_amount || 0).toFixed(2)}</p>
-                                            </div>
-                                            {viewingInvoice.notes && (
-                                                <div className="col-md-12 mt-2">
-                                                    <p><strong>Notes:</strong> {viewingInvoice.notes}</p>
+                            <div className="modal-body p-4">
+                                {/* Invoice Header */}
+                                <div className="row mb-4">
+                                    <div className="col-md-6">
+                                        <div className="card border-0 bg-light h-100">
+                                            <div className="card-body">
+                                                <h6 className="card-title text-primary mb-3">
+                                                    <i className="fa-solid fa-receipt me-2"></i>
+                                                    Invoice Details
+                                                </h6>
+                                                <div className="row">
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Invoice No</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.invoice_number}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Invoice Date</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.invoice_date}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Received By</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.received_by}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Received Date</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.received_date}</p>
+                                                    </div>
+                                                    <div className="col-12 mb-2">
+                                                        <small className="text-muted">Notes</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.notes || 'No notes'}</p>
+                                                    </div>
                                                 </div>
-                                            )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <div className="card border-0 bg-light h-100">
+                                            <div className="card-body">
+                                                <h6 className="card-title text-primary mb-3">
+                                                    <i className="fa-solid fa-building me-2"></i>
+                                                    Supplier Details
+                                                </h6>
+                                                <div className="row">
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Supplier</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.supplier_name || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Phone</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.phone_number || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">GST Number</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.gst_number || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="col-6 mb-2">
+                                                        <small className="text-muted">Status</small>
+                                                        <p className="mb-1">
+                                                            <span className={`badge ${
+                                                                viewingInvoice.status === 'completed' ? 'bg-success' :
+                                                                viewingInvoice.status === 'draft' ? 'bg-warning text-dark' :
+                                                                'bg-secondary'
+                                                            }`}>
+                                                                {viewingInvoice.status}
+                                                            </span>
+                                                        </p>
+                                                    </div>
+                                                    <div className="col-12 mb-2">
+                                                        <small className="text-muted">Address</small>
+                                                        <p className="fw-bold mb-1">{viewingInvoice.supplier_address || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Invoice Items */}
-                                <h5>Invoice Items</h5>
-                                <div className="table-responsive">
-                                    <table className="table table-bordered">
-                                        <thead>
-                                            <tr>
-                                                <th>#</th>
-                                                <th>Barcode</th>
-                                                <th>Part No</th>
-                                                <th>Product Name</th>
-                                                <th>Quantity</th>
-                                                <th>Pending Testing</th>
-                                                <th>Completed Testing</th>
-                                                <th>Testing Status</th>
-                                                <th>Inspected By</th>
-                                                <th>Inspected Date</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {viewingInvoice.items?.map((item, index) => (
-                                                <tr key={item.id}>
-                                                    <td>{index + 1}</td>
-                                                    <td><code>{item.bare_code}</code></td>
-                                                    <td>{item.part_no}</td>
-                                                    <td>{item.product_name}</td>
-                                                    <td>{parseFloat(item.quantity).toFixed(2)}</td>
-                                                    <td>
-                                                        <span className={`badge ${item.pending_testing > 0 ? 'bg-warning' : 'bg-secondary'}`}>
-                                                            {parseFloat(item.pending_testing || 0).toFixed(2)}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <span className={`badge ${item.completed_testing > 0 ? 'bg-success' : 'bg-secondary'}`}>
-                                                            {parseFloat(item.completed_testing || 0).toFixed(2)}
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <span className={`badge ${
-                                                            item.testing_status === 'completed' ? 'bg-success' :
-                                                            item.pending_testing === 0 ? 'bg-success' :
-                                                            'bg-warning'
-                                                        }`}>
-                                                            {item.testing_status === 'completed' || item.pending_testing === 0 ? 'Completed' : 'Pending'}
-                                                        </span>
-                                                    </td>
-                                                    <td>{item.inspected_by || 'N/A'}</td>
-                                                    <td>{item.inspected_date || 'N/A'}</td>
-                                                    <td>
-                                                        {viewingInvoice.status === 'draft' && (item.pending_testing || 0) > 0 && (
-                                                            <div className="btn-group btn-group-sm">
-                                                                <button
-                                                                    className="btn btn-sm btn-outline-success"
-                                                                    onClick={() => openTestingModal(item)}
-                                                                    title="Mark as Completed"
-                                                                    disabled={loadingStates.updateTesting}
-                                                                >
-                                                                    {loadingStates.updateTesting ? (
-                                                                        <span className="spinner-border spinner-border-sm" role="status"></span>
-                                                                    ) : (
-                                                                        <i className="fa-solid fa-check"></i>
-                                                                    )}
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                <div className="card border-0 bg-light">
+                                    <div className="card-body">
+                                        <div className="d-flex justify-content-between align-items-center mb-3">
+                                            <h6 className="card-title text-primary mb-0">
+                                                <i className="fa-solid fa-boxes me-2"></i>
+                                                Invoice Items
+                                                <span className="badge bg-primary ms-2">{viewingInvoice.items?.length || 0}</span>
+                                            </h6>
+                                            <div className="text-end">
+                                                <h5 className="text-primary mb-0">
+                                                    Total: ₹{parseFloat(viewingInvoice.total_amount || 0).toFixed(2)}
+                                                </h5>
+                                            </div>
+                                        </div>
 
-                                {viewingInvoice.status === 'draft' && (
-                                    <div className="alert alert-warning mt-3">
-                                        <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                                        This invoice is in draft status. Finalize it when all items have completed testing.
+                                        <div className="table-responsive">
+                                            <table className="table table-hover bg-white rounded">
+                                                <thead className="table-light">
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Barcode</th>
+                                                        <th>Part No</th>
+                                                        <th>Product Name</th>
+                                                        <th>Quantity</th>
+                                                        <th>Pending</th>
+                                                        <th>Completed</th>
+                                                        <th>Status</th>
+                                                        <th>Inspected By</th>
+                                                        <th>Date</th>
+                                                        <th className="text-center">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {viewingInvoice.items?.map((item, index) => (
+                                                        <tr key={item.id} className="align-middle">
+                                                            <td className="fw-medium text-muted">{index + 1}</td>
+                                                            <td>
+                                                                <code className="bg-light p-1 rounded">{item.bare_code}</code>
+                                                            </td>
+                                                            <td>{item.part_no}</td>
+                                                            <td>
+                                                                <div className="d-flex flex-column">
+                                                                    <strong>{item.product_name}</strong>
+                                                                    <small className="text-muted">
+                                                                        Lot: {item.lot_no || 'N/A'} | Serial: {item.serial_no || 'N/A'}
+                                                                    </small>
+                                                                </div>
+                                                            </td>
+                                                            <td className="fw-bold">{parseFloat(item.quantity).toFixed(2)}</td>
+                                                            <td>
+                                                                <span className={`badge ${item.pending_testing > 0 ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                                                                    {parseFloat(item.pending_testing || 0).toFixed(2)}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <span className={`badge ${item.completed_testing > 0 ? 'bg-success' : 'bg-secondary'}`}>
+                                                                    {parseFloat(item.completed_testing || 0).toFixed(2)}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <span className={`badge ${
+                                                                    item.testing_status === 'completed' || item.pending_testing === 0 ? 'bg-success' :
+                                                                    'bg-warning text-dark'
+                                                                }`}>
+                                                                    {item.testing_status === 'completed' || item.pending_testing === 0 ? 'Completed' : 'Pending'}
+                                                                </span>
+                                                            </td>
+                                                            <td>{item.inspected_by || 'N/A'}</td>
+                                                            <td>{item.inspected_date || 'N/A'}</td>
+                                                            <td className="text-center">
+                                                                {viewingInvoice.status === 'draft' && (item.pending_testing || 0) > 0 && (
+                                                                    <button
+                                                                        className="btn btn-sm btn-success"
+                                                                        onClick={() => openTestingModal(item)}
+                                                                        title="Mark as Completed"
+                                                                        disabled={loadingStates.updateTesting}
+                                                                    >
+                                                                        {loadingStates.updateTesting ? (
+                                                                            <span className="spinner-border spinner-border-sm" role="status"></span>
+                                                                        ) : (
+                                                                            <i className="fa-solid fa-check"></i>
+                                                                        )}
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {viewingInvoice.status === 'draft' && (
+                                            <div className="alert alert-warning mt-3 mb-0">
+                                                <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                                                <strong>Draft Invoice:</strong> Finalize when all items have completed testing.
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-light border-top">
                                 <button 
                                     type="button" 
-                                    className="btn btn-secondary" 
+                                    className="btn btn-outline-secondary"
                                     onClick={() => setViewingInvoice(null)}
                                 >
+                                    <i className="fa-solid fa-times me-2"></i>
                                     Close
                                 </button>
                                 {viewingInvoice.status === 'draft' && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-success"
-                                        onClick={() => finalizeInvoice(viewingInvoice.id)}
-                                        disabled={loadingStates.finalizeInvoice}
-                                    >
-                                        {loadingStates.finalizeInvoice ? (
-                                            <>
-                                                <span className="spinner-border spinner-border-sm me-2"></span>
-                                                Finalizing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <i className="fa-solid fa-check-circle me-2"></i>
-                                                Finalize Invoice
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                                {viewingInvoice.status === 'draft' && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary"
-                                        onClick={() => {
-                                            editInvoice(viewingInvoice)
-                                            setViewingInvoice(null)
-                                        }}
-                                    >
-                                        <i className="fa-solid fa-pen me-2"></i>
-                                        Edit Invoice
-                                    </button>
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline-primary"
+                                            onClick={() => {
+                                                editInvoice(viewingInvoice)
+                                                setViewingInvoice(null)
+                                            }}
+                                        >
+                                            <i className="fa-solid fa-pen me-2"></i>
+                                            Edit Invoice
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-success"
+                                            onClick={() => confirmFinalizeInvoice(viewingInvoice.id)}
+                                            disabled={loadingStates.finalizeInvoice}
+                                        >
+                                            {loadingStates.finalizeInvoice ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                                    Finalizing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fa-solid fa-check-circle me-2"></i>
+                                                    Finalize Invoice
+                                                </>
+                                            )}
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -1564,13 +1719,13 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
 
             {/* Testing Completion Modal */}
             {showTestingModal && selectedItem && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-md">
-                        <div className="modal-content">
-                            <div className="modal-header bg-success text-white">
-                                <h5 className="modal-title">
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-md modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-success text-white py-3">
+                                <h5 className="modal-title fw-bold">
                                     <i className="fa-solid fa-check-circle me-2"></i>
-                                    Mark Testing as Completed
+                                    Complete Testing
                                 </h5>
                                 <button 
                                     type="button" 
@@ -1578,67 +1733,88 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                     onClick={closeTestingModal}
                                 ></button>
                             </div>
-                            <div className="modal-body">
-                                <div className="alert alert-info mb-3">
-                                    <p className="mb-1"><strong>Product:</strong> {selectedItem.product_name}</p>
-                                    <p className="mb-1"><strong>Barcode:</strong> <code>{selectedItem.bare_code}</code></p>
-                                    <p className="mb-1"><strong>Part No:</strong> {selectedItem.part_no}</p>
-                                    <p className="mb-0"><strong>Pending Testing:</strong> 
-                                        <span className="badge bg-warning ms-2">
-                                            {parseFloat(selectedItem.pending_testing || 0).toFixed(2)}
-                                        </span>
-                                    </p>
+                            <div className="modal-body p-4">
+                                {/* Product Info */}
+                                <div className="card border-0 bg-light mb-4">
+                                    <div className="card-body">
+                                        <h6 className="card-title text-primary mb-3">Product Information</h6>
+                                        <div className="row">
+                                            <div className="col-md-6 mb-2">
+                                                <small className="text-muted">Product Name</small>
+                                                <p className="fw-bold mb-1">{selectedItem.product_name}</p>
+                                            </div>
+                                            <div className="col-md-6 mb-2">
+                                                <small className="text-muted">Part No</small>
+                                                <p className="fw-bold mb-1">{selectedItem.part_no}</p>
+                                            </div>
+                                            <div className="col-md-6 mb-2">
+                                                <small className="text-muted">Barcode</small>
+                                                <p className="fw-bold mb-1">
+                                                    <code className="bg-white p-1 rounded">{selectedItem.bare_code}</code>
+                                                </p>
+                                            </div>
+                                            <div className="col-md-6 mb-2">
+                                                <small className="text-muted">Pending Testing</small>
+                                                <p className="fw-bold mb-1">
+                                                    <span className="badge bg-warning text-dark px-3 py-2">
+                                                        {parseFloat(selectedItem.pending_testing || selectedItem.quantity || 0).toFixed(2)}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <div className="mb-3">
-                                    <label className="form-label">
-                                        <strong>Completed Quantity *</strong>
-                                        <small className="text-muted ms-1">(Max: {parseFloat(selectedItem.pending_testing || selectedItem.quantity || 0).toFixed(2)})</small>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={testingForm.completed_qty}
-                                        onChange={(e) => setTestingForm(prev => ({ 
-                                            ...prev, 
-                                            completed_qty: e.target.value.replace(/[^0-9.]/g, '')
-                                        }))}
-                                        pattern="[0-9]*\.?[0-9]{0,2}"
-                                        title="Enter quantity (e.g., 2.5)"
-                                        placeholder="Enter completed quantity"
-                                    />
+
+                                {/* Testing Form */}
+                                <div className="row g-3">
+                                    <div className="col-md-12">
+                                        <label className="form-label fw-bold">
+                                            Completed Quantity *
+                                            <small className="text-muted ms-1">
+                                                (Max: {parseFloat(selectedItem.pending_testing || selectedItem.quantity || 0).toFixed(2)})
+                                            </small>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="form-control border-2"
+                                            value={testingForm.completed_qty}
+                                            onChange={(e) => setTestingForm(prev => ({ 
+                                                ...prev, 
+                                                completed_qty: e.target.value.replace(/[^0-9.]/g, '')
+                                            }))}
+                                            placeholder="Enter completed quantity"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-bold">Inspected By *</label>
+                                        <input
+                                            type="text"
+                                            className="form-control border-2"
+                                            value={testingForm.inspected_by}
+                                            onChange={(e) => setTestingForm(prev => ({ ...prev, inspected_by: e.target.value }))}
+                                            placeholder="Enter inspector name"
+                                        />
+                                    </div>
+                                    <div className="col-md-6">
+                                        <label className="form-label fw-bold">Inspection Date *</label>
+                                        <input
+                                            type="date"
+                                            className="form-control border-2"
+                                            value={testingForm.inspected_date}
+                                            onChange={(e) => setTestingForm(prev => ({ ...prev, inspected_date: e.target.value }))}
+                                        />
+                                    </div>
                                 </div>
-                                
-                                <div className="mb-3">
-                                    <label className="form-label"><strong>Inspected By *</strong></label>
-                                    <input
-                                        type="text"
-                                        className="form-control"
-                                        value={testingForm.inspected_by}
-                                        onChange={(e) => setTestingForm(prev => ({ ...prev, inspected_by: e.target.value }))}
-                                        placeholder="Enter inspector name"
-                                    />
-                                </div>
-                                
-                                <div className="mb-3">
-                                    <label className="form-label"><strong>Inspection Date *</strong></label>
-                                    <input
-                                        type="date"
-                                        className="form-control"
-                                        value={testingForm.inspected_date}
-                                        onChange={(e) => setTestingForm(prev => ({ ...prev, inspected_date: e.target.value }))}
-                                    />
-                                </div>
-                                
-                                <div className="alert alert-warning">
-                                    <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                                    This action will move items from pending testing to available stock.
+
+                                <div className="alert alert-info mt-4 mb-0">
+                                    <i className="fa-solid fa-info-circle me-2"></i>
+                                    This will move items from pending testing to available stock inventory.
                                 </div>
                             </div>
-                            <div className="modal-footer">
+                            <div className="modal-footer bg-light border-top">
                                 <button 
                                     type="button" 
-                                    className="btn btn-secondary" 
+                                    className="btn btn-outline-secondary"
                                     onClick={closeTestingModal}
                                     disabled={loadingStates.updateTesting}
                                 >
@@ -1646,21 +1822,211 @@ function Inward({ inwardInvoices, setInwardInvoices, products, setProducts, load
                                 </button>
                                 <button 
                                     type="button" 
-                                    className="btn btn-success"
+                                    className="btn btn-success px-4"
                                     onClick={updateTestingQuantity}
                                     disabled={loadingStates.updateTesting || !testingForm.completed_qty || !testingForm.inspected_by || !testingForm.inspected_date}
                                 >
                                     {loadingStates.updateTesting ? (
                                         <>
                                             <span className="spinner-border spinner-border-sm me-2"></span>
-                                            Updating...
+                                            Processing...
                                         </>
                                     ) : (
                                         <>
                                             <i className="fa-solid fa-check-circle me-2"></i>
-                                            Mark as Completed
+                                            Complete Testing
                                         </>
                                     )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && invoiceToDelete && (
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-md modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-danger text-white py-3">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                                    Confirm Deletion
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close btn-close-white" 
+                                    onClick={() => {
+                                        setShowDeleteConfirm(false)
+                                        setInvoiceToDelete(null)
+                                    }}
+                                ></button>
+                            </div>
+                            <div className="modal-body p-4">
+                                <div className="text-center mb-4">
+                                    <i className="fa-solid fa-trash fa-3x text-danger mb-3"></i>
+                                    <h5 className="fw-bold">Delete Invoice?</h5>
+                                    <p className="text-muted">
+                                        Are you sure you want to delete invoice <strong>#{invoiceToDelete.invoice_number}</strong>?
+                                    </p>
+                                    <div className="alert alert-danger mt-3">
+                                        <i className="fa-solid fa-exclamation-circle me-2"></i>
+                                        <strong>Warning:</strong> This action cannot be undone. All items and testing data will be permanently removed.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer bg-light border-top">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => {
+                                        setShowDeleteConfirm(false)
+                                        setInvoiceToDelete(null)
+                                    }}
+                                    disabled={loadingStates.deleteInvoice}
+                                >
+                                    <i className="fa-solid fa-times me-2"></i>
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-danger px-4"
+                                    onClick={deleteInvoice}
+                                    disabled={loadingStates.deleteInvoice}
+                                >
+                                    {loadingStates.deleteInvoice ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2"></span>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-trash me-2"></i>
+                                            Delete Invoice
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Finalize Confirmation Modal */}
+            {showFinalizeConfirm && invoiceToFinalize && (
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-md modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-success text-white py-3">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fa-solid fa-check-circle me-2"></i>
+                                    Finalize Invoice
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close btn-close-white" 
+                                    onClick={() => {
+                                        setShowFinalizeConfirm(false)
+                                        setInvoiceToFinalize(null)
+                                    }}
+                                ></button>
+                            </div>
+                            <div className="modal-body p-4">
+                                <div className="text-center mb-4">
+                                    <i className="fa-solid fa-file-check fa-3x text-success mb-3"></i>
+                                    <h5 className="fw-bold">Finalize Invoice?</h5>
+                                    <p className="text-muted">
+                                        Are you sure you want to finalize invoice <strong>#{invoiceToFinalize.invoice_number}</strong>?
+                                    </p>
+                                    <div className="alert alert-warning mt-3">
+                                        <i className="fa-solid fa-exclamation-circle me-2"></i>
+                                        <strong>Note:</strong> This will mark the invoice as completed. Make sure all items have completed testing.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer bg-light border-top">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => {
+                                        setShowFinalizeConfirm(false)
+                                        setInvoiceToFinalize(null)
+                                    }}
+                                    disabled={loadingStates.finalizeInvoice}
+                                >
+                                    <i className="fa-solid fa-times me-2"></i>
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-success px-4"
+                                    onClick={finalizeInvoice}
+                                    disabled={loadingStates.finalizeInvoice}
+                                >
+                                    {loadingStates.finalizeInvoice ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2"></span>
+                                            Finalizing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fa-solid fa-check-circle me-2"></i>
+                                            Finalize Invoice
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Discard Changes Confirmation Modal */}
+            {showDiscardConfirm && (
+                <div className="modal fade show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-md modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg">
+                            <div className="modal-header bg-warning text-white py-3">
+                                <h5 className="modal-title fw-bold">
+                                    <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                                    Discard Changes
+                                </h5>
+                                <button 
+                                    type="button" 
+                                    className="btn-close btn-close-white" 
+                                    onClick={() => setShowDiscardConfirm(false)}
+                                ></button>
+                            </div>
+                            <div className="modal-body p-4">
+                                <div className="text-center mb-4">
+                                    <i className="fa-solid fa-file-excel fa-3x text-warning mb-3"></i>
+                                    <h5 className="fw-bold">Discard Changes?</h5>
+                                    <p className="text-muted">
+                                        You have unsaved changes. Are you sure you want to discard them?
+                                    </p>
+                                    <div className="alert alert-warning mt-3">
+                                        <i className="fa-solid fa-exclamation-circle me-2"></i>
+                                        All unsaved changes will be lost.
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="modal-footer bg-light border-top">
+                                <button 
+                                    type="button" 
+                                    className="btn btn-outline-secondary"
+                                    onClick={() => setShowDiscardConfirm(false)}
+                                >
+                                    <i className="fa-solid fa-times me-2"></i>
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-warning px-4"
+                                    onClick={discardChanges}
+                                >
+                                    <i className="fa-solid fa-trash me-2"></i>
+                                    Discard Changes
                                 </button>
                             </div>
                         </div>

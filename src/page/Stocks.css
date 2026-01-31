@@ -2,6 +2,7 @@
 .stocks-container {
   background-color: #f8f9fa;
   min-height: calc(100vh - 56px);
+  margin-top: 10px;
 }
 
 /* Card Styling */
@@ -66,7 +67,7 @@
   border-radius: 8px;
   font-weight: 500;
   transition: all 0.3s ease;
-  border: none;
+
 }
 
 .btn:hover {
@@ -82,19 +83,7 @@
   border-radius: 6px;
 }
 
-/* Modal Styling */
-.modal-content {
-  border-radius: 16px;
-  overflow: hidden;
-}
 
-.modal-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.modal-body {
-  background-color: #f8f9fa;
-}
 
 /* Scanner Container */
 .scanner-container {

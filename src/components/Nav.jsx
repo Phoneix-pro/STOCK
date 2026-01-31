@@ -33,10 +33,10 @@ function NAV() {
 
   const navLinks = [
     { path: "/", label: "DASHBOARD", icon: "fa-chart-pie" },
-    { path: "/Inward", label: "INWARD", icon: "fa-up-down" },
-    { path: "/Stocks", label: "STOCKS", icon: "fa-box-open" },
-    { path: "/Production", label: "PRODUCTION", icon: "fa-brands fa-product-hunt" },
-    { path: "/Sales", label: "SALES", icon: "fa-hand-holding-heart" }
+    { path: "/Inward", label: "INWARD", icon: "fa-solid fa-arrow-trend-down" },
+    { path: "/Stocks", label: "STOCKS", icon: "fa-solid fa-warehouse" },
+    { path: "/Production", label: "PRODUCTION", icon: "fa-solid fa-box-open"},
+    { path: "/Sales", label: "SALES", icon: "fa-solid fa-people-carry-box"}
   ];
 
   return (

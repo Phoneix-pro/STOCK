@@ -54,6 +54,7 @@ function BMR({
 
     // Global Process Templates States
     const [showGlobalProcessTemplateModal, setShowGlobalProcessTemplateModal] = useState(false);
+    const [showLoadProcessTemplateModal, setShowLoadProcessTemplateModal] = useState(false);
     const [newGlobalProcessTemplate, setNewGlobalProcessTemplate] = useState({
         name: "",
         description: "",
@@ -77,6 +78,7 @@ function BMR({
 
     // Global Templates States
     const [showGlobalTemplateModal, setShowGlobalTemplateModal] = useState(false);
+    const [showViewGlobalTemplateModal, setShowViewGlobalTemplateModal] = useState(false);
     const [newGlobalTemplate, setNewGlobalTemplate] = useState({
         name: "",
         description: "",
@@ -124,6 +126,23 @@ function BMR({
         assemblyType: "all",
         searchTerm: ""
     });
+
+    // Confirmation Modals
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmConfig, setConfirmConfig] = useState({
+        title: "",
+        message: "",
+        onConfirm: () => {},
+        onCancel: () => {},
+        confirmText: "Yes",
+        cancelText: "No"
+    });
+
+    // Show confirmation modal
+    const showConfirmation = (config) => {
+        setConfirmConfig(config);
+        setShowConfirmModal(true);
+    };
 
     // Load BMR data from Supabase - FILTERED BY DEPARTMENT
     useEffect(() => {
@@ -286,6 +305,7 @@ function BMR({
             setProcesses(prev => [...prev, ...newProcesses]);
             toast.success(`Loaded ${template.processes.length} processes from "${template.name}" template!`);
             setSelectedGlobalProcessTemplate(null);
+            setShowLoadProcessTemplateModal(false);
             setShowProcessModal(true);
         } catch (error) {
             toast.error('Error loading global process template: ' + error.message);
@@ -318,21 +338,28 @@ function BMR({
 
     // Delete global process template
     const deleteGlobalProcessTemplate = async (templateId) => {
-        if (!window.confirm('Are you sure you want to delete this global process template?')) return;
+        showConfirmation({
+            title: "Delete Global Process Template",
+            message: "Are you sure you want to delete this global process template? This action cannot be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('global_process_templates')
+                        .delete()
+                        .eq('id', templateId);
 
-        try {
-            const { error } = await supabase
-                .from('global_process_templates')
-                .delete()
-                .eq('id', templateId);
+                    if (error) throw error;
 
-            if (error) throw error;
-
-            setGlobalProcessTemplates(prev => prev.filter(template => template.id !== templateId));
-            toast.success('Global process template deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting global process template: ' + error.message);
-        }
+                    setGlobalProcessTemplates(prev => prev.filter(template => template.id !== templateId));
+                    toast.success('Global process template deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting global process template: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Save to existing global process template
@@ -379,11 +406,20 @@ function BMR({
 
     // Remove process from global process template
     const removeProcessFromGlobalTemplate = (index) => {
-        setNewGlobalProcessTemplate(prev => ({
-            ...prev,
-            processes: prev.processes.filter((_, i) => i !== index)
-        }));
-        toast.success('Process removed from template!');
+        showConfirmation({
+            title: "Remove Process",
+            message: "Are you sure you want to remove this process from the template?",
+            confirmText: "Remove",
+            cancelText: "Cancel",
+            onConfirm: () => {
+                setNewGlobalProcessTemplate(prev => ({
+                    ...prev,
+                    processes: prev.processes.filter((_, i) => i !== index)
+                }));
+                toast.success('Process removed from template!');
+            },
+            onCancel: () => {}
+        });
     };
 
     // Load BMR data from Supabase with decimal quantity support
@@ -521,6 +557,12 @@ function BMR({
         }
     };
 
+    // View Global Template Data
+    const viewGlobalTemplate = (template) => {
+        setSelectedGlobalTemplate(template);
+        setShowViewGlobalTemplateModal(true);
+    };
+
     // Add new global template
     const addGlobalTemplate = async () => {
         try {
@@ -651,6 +693,7 @@ function BMR({
 
             toast.success('Global template loaded successfully!');
             setSelectedGlobalTemplate(null);
+            setShowViewGlobalTemplateModal(false);
         } catch (error) {
             toast.error('Error loading global template: ' + error.message);
         }
@@ -658,21 +701,28 @@ function BMR({
 
     // Delete global template
     const deleteGlobalTemplate = async (templateId) => {
-        if (!window.confirm('Are you sure you want to delete this global template?')) return;
+        showConfirmation({
+            title: "Delete Global Template",
+            message: "Are you sure you want to delete this global template? This action cannot be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('global_templates')
+                        .delete()
+                        .eq('id', templateId);
 
-        try {
-            const { error } = await supabase
-                .from('global_templates')
-                .delete()
-                .eq('id', templateId);
+                    if (error) throw error;
 
-            if (error) throw error;
-
-            setGlobalTemplates(prev => prev.filter(template => template.id !== templateId));
-            toast.success('Global template deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting global template: ' + error.message);
-        }
+                    setGlobalTemplates(prev => prev.filter(template => template.id !== templateId));
+                    toast.success('Global template deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting global template: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Save to existing global template
@@ -736,21 +786,28 @@ function BMR({
 
     // Delete process template
     const deleteProcessTemplate = async (templateId) => {
-        if (!window.confirm('Are you sure you want to delete this process template?')) return;
+        showConfirmation({
+            title: "Delete Process Template",
+            message: "Are you sure you want to delete this process template?",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('process_templates')
+                        .delete()
+                        .eq('id', templateId);
 
-        try {
-            const { error } = await supabase
-                .from('process_templates')
-                .delete()
-                .eq('id', templateId);
+                    if (error) throw error;
 
-            if (error) throw error;
-
-            setProcessTemplates(prev => prev.filter(template => template.id !== templateId));
-            toast.success('Process template deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting process template: ' + error.message);
-        }
+                    setProcessTemplates(prev => prev.filter(template => template.id !== templateId));
+                    toast.success('Process template deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting process template: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Load processes with decimal support
@@ -1018,58 +1075,65 @@ function BMR({
 
     // Delete product from Supabase
     const deleteProduct = async (productId) => {
-        if (!window.confirm('Are you sure you want to delete this product?')) return;
+        showConfirmation({
+            title: "Delete Product",
+            message: "Are you sure you want to delete this product? This will also delete all associated assemblies and BMRs.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { data: assemblies, error: assembliesError } = await supabase
+                        .from('bmr_assemblies')
+                        .select('id')
+                        .eq('product_id', productId);
 
-        try {
-            const { data: assemblies, error: assembliesError } = await supabase
-                .from('bmr_assemblies')
-                .select('id')
-                .eq('product_id', productId);
+                    if (assembliesError) throw assembliesError;
 
-            if (assembliesError) throw assembliesError;
+                    if (assemblies && assemblies.length > 0) {
+                        const assemblyIds = assemblies.map(assembly => assembly.id);
 
-            if (assemblies && assemblies.length > 0) {
-                const assemblyIds = assemblies.map(assembly => assembly.id);
+                        const { error: templateDataError } = await supabase
+                            .from('bmr_template_data')
+                            .delete()
+                            .in('template_id', 
+                                (await supabase.from('bmr_templates').select('id').in('assembly_id', assemblyIds)).data?.map(t => t.id) || []
+                            );
 
-                const { error: templateDataError } = await supabase
-                    .from('bmr_template_data')
-                    .delete()
-                    .in('template_id', 
-                        (await supabase.from('bmr_templates').select('id').in('assembly_id', assemblyIds)).data?.map(t => t.id) || []
-                    );
+                        if (templateDataError) throw templateDataError;
 
-                if (templateDataError) throw templateDataError;
+                        const { error: templatesError } = await supabase
+                            .from('bmr_templates')
+                            .delete()
+                            .in('assembly_id', assemblyIds);
 
-                const { error: templatesError } = await supabase
-                    .from('bmr_templates')
-                    .delete()
-                    .in('assembly_id', assemblyIds);
+                        if (templatesError) throw templatesError;
 
-                if (templatesError) throw templatesError;
+                        const { error: assembliesDeleteError } = await supabase
+                            .from('bmr_assemblies')
+                            .delete()
+                            .eq('product_id', productId);
 
-                const { error: assembliesDeleteError } = await supabase
-                    .from('bmr_assemblies')
-                    .delete()
-                    .eq('product_id', productId);
+                        if (assembliesDeleteError) throw assembliesDeleteError;
+                    }
 
-                if (assembliesDeleteError) throw assembliesDeleteError;
-            }
+                    const { error: productError } = await supabase
+                        .from('bmr_products')
+                        .delete()
+                        .eq('id', productId);
 
-            const { error: productError } = await supabase
-                .from('bmr_products')
-                .delete()
-                .eq('id', productId);
+                    if (productError) throw productError;
 
-            if (productError) throw productError;
-
-            setBmrProducts(prev => prev.filter(p => p.id !== productId));
-            toast.success('Product deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting product: ' + error.message);
-        }
+                    setBmrProducts(prev => prev.filter(p => p.id !== productId));
+                    toast.success('Product deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting product: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
-    // Add assembly to product in Supabase
+    // Add assembly to product in Supabase - MODIFIED TO REMOVE RANDOM NUMBERS
     const addAssembly = async (productId, type) => {
         try {
             const product = bmrProducts.find(p => p.id === productId);
@@ -1087,14 +1151,14 @@ function BMR({
                     return;
                 }
                 assemblyType = "assembly";
-                assemblyName = `ASSEMBLY ${Date.now().toString().slice(-4)}`;
+                assemblyName = "ASSEMBLY";
             } else {
                 if (type === "main") {
                     assemblyName = "MAIN ASSEMBLY";
                 } else if (type === "sub") {
-                    assemblyName = `SUB ASSEMBLY ${Date.now().toString().slice(-4)}`;
+                    assemblyName = "SUB ASSEMBLY"; // Removed random numbers
                 } else {
-                    assemblyName = `ASSEMBLY ${Date.now().toString().slice(-4)}`;
+                    assemblyName = "ASSEMBLY";
                 }
             }
             
@@ -1170,46 +1234,53 @@ function BMR({
 
     // Delete assembly from Supabase
     const deleteAssembly = async (productId, assemblyId) => {
-        if (!window.confirm('Are you sure you want to delete this assembly?')) return;
+        showConfirmation({
+            title: "Delete Assembly",
+            message: "Are you sure you want to delete this assembly? This will also delete all associated BMRs.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error: templateDataError } = await supabase
+                        .from('bmr_template_data')
+                        .delete()
+                        .in('template_id', 
+                            (await supabase.from('bmr_templates').select('id').eq('assembly_id', assemblyId)).data?.map(t => t.id) || []
+                        );
 
-        try {
-            const { error: templateDataError } = await supabase
-                .from('bmr_template_data')
-                .delete()
-                .in('template_id', 
-                    (await supabase.from('bmr_templates').select('id').eq('assembly_id', assemblyId)).data?.map(t => t.id) || []
-                );
+                    if (templateDataError) throw templateDataError;
 
-            if (templateDataError) throw templateDataError;
+                    const { error: templatesError } = await supabase
+                        .from('bmr_templates')
+                        .delete()
+                        .eq('assembly_id', assemblyId);
 
-            const { error: templatesError } = await supabase
-                .from('bmr_templates')
-                .delete()
-                .eq('assembly_id', assemblyId);
+                    if (templatesError) throw templatesError;
 
-            if (templatesError) throw templatesError;
+                    const { error: assemblyError } = await supabase
+                        .from('bmr_assemblies')
+                        .delete()
+                        .eq('id', assemblyId);
 
-            const { error: assemblyError } = await supabase
-                .from('bmr_assemblies')
-                .delete()
-                .eq('id', assemblyId);
+                    if (assemblyError) throw assemblyError;
 
-            if (assemblyError) throw assemblyError;
-
-            setBmrProducts(prev =>
-                prev.map(product =>
-                    product.id === productId
-                        ? {
-                            ...product,
-                            assemblies: product.assemblies.filter(a => a.id !== assemblyId)
-                        }
-                        : product
-                )
-            );
-            toast.success('Assembly deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting assembly: ' + error.message);
-        }
+                    setBmrProducts(prev =>
+                        prev.map(product =>
+                            product.id === productId
+                                ? {
+                                    ...product,
+                                    assemblies: product.assemblies.filter(a => a.id !== assemblyId)
+                                }
+                                : product
+                        )
+                    );
+                    toast.success('Assembly deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting assembly: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Check if initial code is unique WITHIN DEPARTMENT
@@ -1373,7 +1444,7 @@ function BMR({
                                 )
                             }
                             : product
-                    )
+                        )
                 );
 
                 setBmrTemplates(prev =>
@@ -1400,59 +1471,66 @@ function BMR({
 
     // Delete BMR from Supabase
     const deleteBMR = async (bmrId, productId, assemblyId) => {
-        if (!window.confirm('Are you sure you want to delete this BMR?')) return;
+        showConfirmation({
+            title: "Delete BMR",
+            message: "Are you sure you want to delete this BMR? This will also delete all template data and processes.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error: templateDataError } = await supabase
+                        .from('bmr_template_data')
+                        .delete()
+                        .eq('template_id', bmrId);
 
-        try {
-            const { error: templateDataError } = await supabase
-                .from('bmr_template_data')
-                .delete()
-                .eq('template_id', bmrId);
+                    if (templateDataError) throw templateDataError;
 
-            if (templateDataError) throw templateDataError;
+                    const { error: processesError } = await supabase
+                        .from('processes')
+                        .delete()
+                        .eq('template_id', bmrId);
 
-            const { error: processesError } = await supabase
-                .from('processes')
-                .delete()
-                .eq('template_id', bmrId);
+                    if (processesError) throw processesError;
 
-            if (processesError) throw processesError;
+                    const { error: bmrError } = await supabase
+                        .from('bmr_templates')
+                        .delete()
+                        .eq('id', bmrId);
 
-            const { error: bmrError } = await supabase
-                .from('bmr_templates')
-                .delete()
-                .eq('id', bmrId);
+                    if (bmrError) throw bmrError;
 
-            if (bmrError) throw bmrError;
-
-            setBmrProducts(prev =>
-                prev.map(product =>
-                    product.id === productId
-                        ? {
-                            ...product,
-                            assemblies: product.assemblies.map(assembly =>
-                                assembly.id === assemblyId
-                                    ? {
-                                        ...assembly,
-                                        bmrs: assembly.bmrs.filter(bmr => bmr.id !== bmrId)
-                                    }
-                                    : assembly
+                    setBmrProducts(prev =>
+                        prev.map(product =>
+                            product.id === productId
+                                ? {
+                                    ...product,
+                                    assemblies: product.assemblies.map(assembly =>
+                                        assembly.id === assemblyId
+                                            ? {
+                                                ...assembly,
+                                                bmrs: assembly.bmrs.filter(bmr => bmr.id !== bmrId)
+                                            }
+                                            : assembly
+                                    )
+                                }
+                                : product
                             )
-                        }
-                        : product
-                )
-            );
+                    );
 
-            setBmrTemplates(prev => prev.filter(bmr => bmr.id !== bmrId));
+                    setBmrTemplates(prev => prev.filter(bmr => bmr.id !== bmrId));
 
-            const updatedTemplates = { ...savedTemplates };
-            delete updatedTemplates[bmrId];
-            setSavedTemplates(updatedTemplates);
-            saveTemplatesToStorage(updatedTemplates);
+                    const updatedTemplates = { ...savedTemplates };
+                    delete updatedTemplates[bmrId];
+                    setSavedTemplates(updatedTemplates);
+                    saveTemplatesToStorage(updatedTemplates);
 
-            toast.success('BMR deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting BMR: ' + error.message);
-        }
+                    toast.success('BMR deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting BMR: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Update BMR status in Supabase
@@ -1484,7 +1562,7 @@ function BMR({
                             )
                         }
                         : product
-                )
+                    )
             );
 
             setBmrTemplates(prev =>
@@ -1618,7 +1696,7 @@ function BMR({
                             )
                         }
                         : product
-                )
+                    )
             );
 
             if (selectedBMR && selectedBMR.id === bmrId) {
@@ -1712,7 +1790,7 @@ function BMR({
                             )
                         }
                         : product
-                )
+                    )
             );
 
             if (selectedBMR && selectedBMR.id === bmrId) {
@@ -1730,7 +1808,7 @@ function BMR({
         }
     };
 
-    // Print BMR Template with decimal support
+    // Print BMR Template with decimal support (UPDATED VERSION)
     const printBMRTemplate = (bmr, includeProcesses = true) => {
         const printWindow = window.open('', '_blank');
         const templateData = bmr.templateData || [];
@@ -1759,183 +1837,204 @@ function BMR({
                 <head>
                     <title>BMR - ${bmr.name}</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-                        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
-                        .table th { background-color: #f2f2f2; font-weight: bold; }
-                        .no-data { text-align: center; padding: 20px; color: #666; }
-                        .summary { margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; }
-                        .process-section { margin-top: 30px; }
-                        .process-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        .process-table th, .process-table td { border: 1px solid #000; padding: 6px; text-align: left; }
-                        .process-table th { background-color: #e9ecef; }
-                        .total-section { margin-top: 30px; padding: 20px; background-color: #e9f7fe; border-radius: 5px; }
-                        .total-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
-                        .grand-total { font-size: 1.2em; font-weight: bold; color: #0d6efd; }
-                        .handler-details { margin-left: 20px; font-size: 0.9em; }
-                        .handler-row { border-bottom: 1px solid #ddd; padding: 4px 0; }
-                        .decimal-qty { font-family: monospace; }
+                        body { 
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                            margin: 0; 
+                            padding: 20px; 
+                            font-size: 12px; 
+                            color: #333;
+                            background-color: #fff;
+                        }
+                        .print-header { 
+                            text-align: center; 
+                            margin-bottom: 25px; 
+                            padding-bottom: 15px; 
+                            border-bottom: 2px solid #2c3e50;
+                        }
+                        .print-header h2 { 
+                            color: #2c3e50; 
+                            margin: 0 0 5px 0;
+                            font-size: 20px;
+                            font-weight: 600;
+                        }
+                        .print-header h3 { 
+                            color: #3498db; 
+                            margin: 0 0 15px 0;
+                            font-size: 16px;
+                            font-weight: 500;
+                        }
+                        .print-info { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            margin-bottom: 20px;
+                            font-size: 11px;
+                        }
+                        .print-table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin-top: 15px;
+                            font-size: 11px;
+                        }
+                        .print-table th, .print-table td { 
+                            border: 1px solid #ddd; 
+                            padding: 6px; 
+                            text-align: left;
+                            vertical-align: top;
+                        }
+                        .print-table th { 
+                            background-color: #f8f9fa; 
+                            font-weight: 600;
+                            color: #2c3e50;
+                        }
+                        .print-table tr:nth-child(even) {
+                            background-color: #f8f9fa;
+                        }
+                        .print-summary { 
+                            margin-top: 20px; 
+                            padding: 15px; 
+                            border: 1px solid #ddd;
+                            background-color: #f8f9fa;
+                            border-radius: 4px;
+                        }
+                        .print-total { 
+                            margin: 8px 0;
+                            font-weight: 500;
+                        }
+                        .print-grand-total { 
+                            font-weight: 700; 
+                            font-size: 14px;
+                            color: #27ae60;
+                            margin-top: 15px;
+                            padding-top: 15px;
+                            border-top: 2px solid #ddd;
+                        }
+                        @media print {
+                            body { 
+                                padding: 10px; 
+                                margin: 0;
+                            }
+                            .print-table th { 
+                                background-color: #f8f9fa !important;
+                                -webkit-print-color-adjust: exact;
+                            }
+                            .print-table tr:nth-child(even) {
+                                background-color: #f8f9fa !important;
+                                -webkit-print-color-adjust: exact;
+                            }
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>Bill of Material Register</h1>
-                        <h2>${bmr.name} - ${bmr.initialCode}</h2>
-                        <p><strong>Department:</strong> ${activeProductionDepartment}</p>
-                        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                        <p><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
+                    <div class="print-header">
+                        <h2>BATCH MANUFACTURING RECORD</h2>
+                        <h3>${bmr.name} - ${bmr.initialCode}</h3>
+                        <div class="print-info">
+                            <div><strong>Department:</strong> ${activeProductionDepartment}</div>
+                            <div><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+                            <div><strong>Time:</strong> ${new Date().toLocaleTimeString()}</div>
+                        </div>
                     </div>
                     
                     ${templateData.length > 0 ? `
-                        <h3>Template Data</h3>
-                        <table class="table">
+                        <h4 style="color: #2c3e50; margin-bottom: 10px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px;">MATERIALS REQUIRED</h4>
+                        <table class="print-table">
                             <thead>
                                 <tr>
-                                    <th>S.NO</th>
-                                    <th>RAW MATERIAL/PART/NAME/PRODUCT CODE</th>
-                                    <th>PartNo/SKU</th>
-                                    <th>DESCRIPTION</th>
+                                    <th>#</th>
+                                    <th>Raw Material / Description</th>
+                                    <th>Part No</th>
+                                    <th>Internal Serial No</th>
                                     <th>Qty</th>
-                                    <th>Avg Price (₹)</th>
+                                    <th>Price (₹)</th>
                                     <th>Total (₹)</th>
-                                    <th>ISSUED BY</th>
-                                    <th>RECEIVED BY</th>
+                                    <th>Issued By</th>
+                                    <th>Received By</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${templateData.map((item, index) => {
-                                    const totalQuantity = parseFloat(item.totalQuantity) || parseFloat(item.quantity) || 1;
-                                    const averagePrice = parseFloat(item.averagePrice) || parseFloat(item.price) || 0;
-                                    const totalPrice = totalQuantity * averagePrice;
+                                    const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                     
                                     return `
                                         <tr>
-                                            <td>${index + 1}</td>
-                                            <td>${item.rawMaterial || ''}</td>
-                                            <td>${item.partNo || ''}</td>
-                                            <td>${item.description || ''}</td>
-                                            <td class="decimal-qty">${totalQuantity.toFixed(2)}</td>
-                                            <td>₹${averagePrice.toFixed(2)}</td>
-                                            <td>₹${totalPrice.toFixed(2)}</td>
-                                            <td>${item.issuedBy || ''}</td>
-                                            <td>${item.receivedBy || ''}</td>
+                                            <td style="text-align: center; width: 30px;">${index + 1}</td>
+                                            <td>
+                                                <div><strong>${item.rawMaterial || 'N/A'}</strong></div>
+                                                <div style="font-size: 10px; color: #666;">${item.description || ''}</div>
+                                            </td>
+                                            <td>${item.partNo || 'N/A'}</td>
+                                            <td>${item.internalSerialNo || 'N/A'}</td>
+                                            <td style="text-align: center;">${parseFloat(item.quantity || 1).toFixed(2)}</td>
+                                            <td style="text-align: right;">₹${parseFloat(item.price || 0).toFixed(2)}</td>
+                                            <td style="text-align: right; font-weight: 600;">₹${total.toFixed(2)}</td>
+                                            <td>${item.issuedBy || 'N/A'}</td>
+                                            <td>${item.receivedBy || 'N/A'}</td>
                                         </tr>
                                     `;
                                 }).join('')}
                             </tbody>
                         </table>
-                        <div class="summary">
-                            <p><strong>Total Items:</strong> ${templateData.length}</p>
-                            <p><strong>Template Total:</strong> ₹${templateTotal.toFixed(2)}</p>
-                        </div>
-                    ` : `
-                        <div class="no-data">
-                            <p>No template data available for printing.</p>
-                        </div>
-                    `}
-                    
-                    ${includeProcesses && bmrProcesses.length > 0 ? `
-                        <div class="process-section">
-                            <h3>Process Details</h3>
-                            <table class="process-table">
-                                <thead>
-                                    <tr>
-                                        <th>Process Name</th>
-                                        <th>Handler(s)</th>
-                                        <th>Status</th>
-                                        <th>Total Time</th>
-                                        <th>Total Cost (₹)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${bmrProcesses.map(process => {
-                                        const handlers = process.handlers || [];
-                                        const hasMultipleHandlers = handlers.length > 0;
-                                        
-                                        let totalProcessTime = 0;
-                                        let totalProcessCost = 0;
-                                        
-                                        if (hasMultipleHandlers) {
-                                            handlers.forEach(handler => {
-                                                totalProcessTime += handler.elapsedTime || 0;
-                                                totalProcessCost += (handler.amount || 0) * ((handler.elapsedTime || 0) / 60000);
-                                            });
-                                        } else {
-                                            totalProcessTime = process.elapsedTime || 0;
-                                            totalProcessCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
-                                        }
-                                        
-                                        return `
-                                            <tr>
-                                                <td><strong>${process.name}</strong></td>
-                                                <td>
-                                                    ${hasMultipleHandlers ? 
-                                                        handlers.map((handler, idx) => `
-                                                            <div class="handler-row">
-                                                                <strong>${handler.name}</strong> 
-                                                                (₹${handler.amount}/min)<br/>
-                                                                Time: ${formatTime(handler.elapsedTime || 0)} | 
-                                                                Cost: ₹${((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)).toFixed(2)} |
-                                                                Status: ${handler.status || 'initiate'}
-                                                            </div>
-                                                        `).join('') :
-                                                        (process.handler || 'N/A')
-                                                    }
-                                                </td>
-                                                <td>${process.status}</td>
-                                                <td>${formatTime(totalProcessTime)}</td>
-                                                <td>₹${totalProcessCost.toFixed(2)}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colspan="3"><strong>Total Process Summary</strong></td>
-                                        <td><strong>${formatTime(bmrProcesses.reduce((sum, process) => {
-                                            if (process.handlers && process.handlers.length > 0) {
-                                                return sum + process.handlers.reduce((hSum, handler) => hSum + (handler.elapsedTime || 0), 0);
-                                            }
-                                            return sum + (process.elapsedTime || 0);
-                                        }, 0))}</strong></td>
-                                        <td><strong>₹${bmrProcesses.reduce((sum, process) => {
-                                            if (process.handlers && process.handlers.length > 0) {
-                                                return sum + process.handlers.reduce((hSum, handler) => 
-                                                    hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
-                                            }
-                                            return sum + ((process.amount || 0) * ((process.elapsedTime || 0) / 60000));
-                                        }, 0).toFixed(2)}</strong></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                        <div class="print-summary">
+                            <div class="print-total">Total Items: ${templateData.length}</div>
+                            <div class="print-total">Materials Total: ₹${templateTotal.toFixed(2)}</div>
                         </div>
                     ` : ''}
+                    
+                    ${includeProcesses && bmrProcesses.length > 0 ? `
+                        <h4 style="color: #2c3e50; margin: 25px 0 10px 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px;">PROCESS DETAILS</h4>
+                        <table class="print-table">
+                            <thead>
+                                <tr>
+                                    <th>Process Name</th>
+                                    <th>Total Time</th>
+                                    <th>Total Cost (₹)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${bmrProcesses.map(process => {
+                                    let totalCost = 0;
+                                    if (process.handlers && process.handlers.length > 0) {
+                                        totalCost = process.handlers.reduce((hSum, handler) => 
+                                            hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
+                                    } else {
+                                        totalCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
+                                    }
+                                    return `
+                                        <tr>
+                                            <td><strong>${process.name}</strong></td>
+                                            <td>${formatTime(process.elapsedTime || 0)}</td>
+                                            <td style="text-align: right; font-weight: 600;">₹${totalCost.toFixed(2)}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    ` : ''}
 
-                    <div class="total-section">
-                        <h3>Total Price Calculation</h3>
-                        <div class="total-row">
-                            <span>Template Items Total:</span>
-                            <span>₹${templateTotal.toFixed(2)}</span>
-                        </div>
-                        ${includeProcesses && bmrProcesses.length > 0 ? `
-                            <div class="total-row">
-                                <span>Process Costs Total:</span>
-                                <span>₹${processTotal.toFixed(2)}</span>
-                            </div>
-                        ` : ''}
-                        <div class="total-row grand-total">
-                            <span>Grand Total Product Price:</span>
-                            <span>₹${grandTotal.toFixed(2)}</span>
-                        </div>
+                    <div class="print-summary">
+                        <div class="print-grand-total">GRAND TOTAL: ₹${grandTotal.toFixed(2)}</div>
                     </div>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 10px; color: #666; text-align: center;">
+                        <div>Generated by BMR System</div>
+                        <div>Printed on: ${new Date().toLocaleString()}</div>
+                    </div>
+                    
+                    <script>
+                        // Auto-print and close after delay
+                        setTimeout(() => {
+                            window.print();
+                            setTimeout(() => {
+                                window.close();
+                            }, 500);
+                        }, 500);
+                    </script>
                 </body>
             </html>
         `;
         
         printWindow.document.write(printContent);
         printWindow.document.close();
-        printWindow.print();
     };
 
     // Save to history before completion
@@ -2045,7 +2144,7 @@ function BMR({
                         )
                     }
                     : product
-            )
+                )
         );
 
         updateTemplateDataInSupabase(selectedBMR.id, template.templateData || []);
@@ -2095,13 +2194,20 @@ function BMR({
 
     // Delete Saved Template for specific BMR
     const deleteSavedTemplate = (bmrId) => {
-        if (window.confirm('Are you sure you want to delete this saved template?')) {
-            const updatedTemplates = { ...savedTemplates };
-            delete updatedTemplates[bmrId];
-            setSavedTemplates(updatedTemplates);
-            saveTemplatesToStorage(updatedTemplates);
-            toast.success('Saved template deleted!');
-        }
+        showConfirmation({
+            title: "Delete Saved Template",
+            message: "Are you sure you want to delete this saved template?",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: () => {
+                const updatedTemplates = { ...savedTemplates };
+                delete updatedTemplates[bmrId];
+                setSavedTemplates(updatedTemplates);
+                saveTemplatesToStorage(updatedTemplates);
+                toast.success('Saved template deleted!');
+            },
+            onCancel: () => {}
+        });
     };
 
     // Process Management Functions
@@ -2357,33 +2463,40 @@ function BMR({
 
     // Delete process from Supabase
     const deleteProcess = async (processId) => {
-        if (!window.confirm('Are you sure you want to delete this process?')) return;
+        showConfirmation({
+            title: "Delete Process",
+            message: "Are you sure you want to delete this process?",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('processes')
+                        .delete()
+                        .eq('id', processId);
 
-        try {
-            const { error } = await supabase
-                .from('processes')
-                .delete()
-                .eq('id', processId);
+                    if (error) throw error;
 
-            if (error) throw error;
-
-            setProcesses(prev => prev.filter(p => p.id !== processId));
-            
-            setActiveTimers(prev => {
-                const newTimers = { ...prev };
-                delete newTimers[processId];
-                return newTimers;
-            });
-            setElapsedTimes(prev => {
-                const newElapsed = { ...prev };
-                delete newElapsed[processId];
-                return newElapsed;
-            });
-            
-            toast.success('Process deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting process: ' + error.message);
-        }
+                    setProcesses(prev => prev.filter(p => p.id !== processId));
+                    
+                    setActiveTimers(prev => {
+                        const newTimers = { ...prev };
+                        delete newTimers[processId];
+                        return newTimers;
+                    });
+                    setElapsedTimes(prev => {
+                        const newElapsed = { ...prev };
+                        delete newElapsed[processId];
+                        return newElapsed;
+                    });
+                    
+                    toast.success('Process deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting process: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Edit process in Supabase
@@ -2493,249 +2606,258 @@ function BMR({
     const handleCompleteBMR = async () => {
         if (!completedBMR) return;
 
-        try {
-            // 1. Calculate total price (template + processes)
-            const templateTotal = completedBMR.templateData?.reduce((sum, item) => {
-                return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
-            }, 0) || 0;
+        showConfirmation({
+            title: "Complete BMR",
+            message: "Are you sure you want to complete this BMR? This will move the product to stock and mark the BMR as completed.",
+            confirmText: "Complete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    // 1. Calculate total price (template + processes)
+                    const templateTotal = completedBMR.templateData?.reduce((sum, item) => {
+                        return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
+                    }, 0) || 0;
 
-            const processTotal = getBMRProcesses(completedBMR.id).reduce((sum, process) => {
-                let processCost = 0;
-                if (process.handlers && process.handlers.length > 0) {
-                    processCost = process.handlers.reduce((hSum, handler) => 
-                        hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
-                } else {
-                    processCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
-                }
-                return sum + processCost;
-            }, 0);
-
-            const totalPrice = templateTotal + processTotal;
-
-            // 2. Save to history first
-            const historySaved = await saveBMRToHistory(completedBMR);
-            if (!historySaved) {
-                toast.error('Error saving BMR history');
-                return;
-            }
-
-            // 3. Print the BMR with processes
-            printBMRTemplate(completedBMR, true);
-
-            // 4. Release using_quantity from variants
-            for (const templateItem of completedBMR.templateData || []) {
-                if (templateItem.internalSerialNo) {
-                    // Parse multiple barcodes if comma separated
-                    const barcodes = templateItem.internalSerialNo.split(',').map(b => b.trim());
-                    
-                    // Parse variant details if available
-                    let variantDetails = [];
-                    if (templateItem.variantDetails) {
-                        try {
-                            variantDetails = typeof templateItem.variantDetails === 'string' 
-                                ? JSON.parse(templateItem.variantDetails) 
-                                : templateItem.variantDetails;
-                        } catch (e) {
-                            console.error('Error parsing variant details:', e);
+                    const processTotal = getBMRProcesses(completedBMR.id).reduce((sum, process) => {
+                        let processCost = 0;
+                        if (process.handlers && process.handlers.length > 0) {
+                            processCost = process.handlers.reduce((hSum, handler) => 
+                                hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
+                        } else {
+                            processCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
                         }
+                        return sum + processCost;
+                    }, 0);
+
+                    const totalPrice = templateTotal + processTotal;
+
+                    // 2. Save to history first
+                    const historySaved = await saveBMRToHistory(completedBMR);
+                    if (!historySaved) {
+                        toast.error('Error saving BMR history');
+                        return;
                     }
 
-                    const totalQuantityNeeded = parseFloat(templateItem.quantity) || 1.00;
-                    
-                    // Process each barcode
-                    for (const barcode of barcodes) {
-                        try {
-                            // Get variant by barcode
-                            const { data: variant, error: variantError } = await supabase
-                                .from('stock_variants')
-                                .select('*')
-                                .eq('bare_code', barcode)
-                                .single();
+                    // 3. Print the BMR with processes
+                    printBMRTemplate(completedBMR, true);
 
-                            if (!variantError && variant) {
-                                // Find variant details for this barcode
-                                const variantDetail = variantDetails.find(v => v.barcode === barcode);
-                                const allocatedQty = variantDetail ? parseFloat(variantDetail.qty) : parseFloat(totalQuantityNeeded / barcodes.length);
-                                
-                                if (allocatedQty > 0) {
-                                    // Release using quantity
-                                    const currentUsingQty = parseFloat(variant.using_quantity) || 0;
-                                    const newUsingQty = Math.max(0, currentUsingQty - allocatedQty);
-                                    
-                                    await supabase
-                                        .from('stock_variants')
-                                        .update({
-                                            using_quantity: newUsingQty,
-                                            updated_at: new Date().toISOString()
-                                        })
-                                        .eq('id', variant.id);
-                                    
-                                    // Record consumption
-                                    await supabase
-                                        .from('stock_movements')
-                                        .insert([{
-                                            variant_id: variant.id,
-                                            movement_type: 'out',
-                                            quantity: allocatedQty,
-                                            remaining_quantity: newUsingQty,
-                                            reference_type: 'bmr_completion',
-                                            reference_id: completedBMR.id,
-                                            movement_date: new Date().toISOString()
-                                        }]);
-                                    
-                                    // Update stock totals
-                                    const { data: stockData, error: stockError } = await supabase
-                                        .from('stocks')
-                                        .select('using_quantity')
-                                        .eq('id', variant.stock_id)
-                                        .single();
-
-                                    if (!stockError) {
-                                        const stockUsingQty = parseFloat(stockData.using_quantity) || 0;
-                                        const newStockUsingQty = Math.max(0, stockUsingQty - allocatedQty);
-                                        
-                                        await supabase
-                                            .from('stocks')
-                                            .update({
-                                                using_quantity: newStockUsingQty,
-                                                updated_at: new Date().toISOString()
-                                            })
-                                            .eq('id', variant.stock_id);
-                                    }
+                    // 4. Release using_quantity from variants
+                    for (const templateItem of completedBMR.templateData || []) {
+                        if (templateItem.internalSerialNo) {
+                            // Parse multiple barcodes if comma separated
+                            const barcodes = templateItem.internalSerialNo.split(',').map(b => b.trim());
+                            
+                            // Parse variant details if available
+                            let variantDetails = [];
+                            if (templateItem.variantDetails) {
+                                try {
+                                    variantDetails = typeof templateItem.variantDetails === 'string' 
+                                        ? JSON.parse(templateItem.variantDetails) 
+                                        : templateItem.variantDetails;
+                                } catch (e) {
+                                    console.error('Error parsing variant details:', e);
                                 }
                             }
-                        } catch (error) {
-                            console.error(`Error processing variant ${barcode}:`, error);
+
+                            const totalQuantityNeeded = parseFloat(templateItem.quantity) || 1.00;
+                            
+                            // Process each barcode
+                            for (const barcode of barcodes) {
+                                try {
+                                    // Get variant by barcode
+                                    const { data: variant, error: variantError } = await supabase
+                                        .from('stock_variants')
+                                        .select('*')
+                                        .eq('bare_code', barcode)
+                                        .single();
+
+                                    if (!variantError && variant) {
+                                        // Find variant details for this barcode
+                                        const variantDetail = variantDetails.find(v => v.barcode === barcode);
+                                        const allocatedQty = variantDetail ? parseFloat(variantDetail.qty) : parseFloat(totalQuantityNeeded / barcodes.length);
+                                        
+                                        if (allocatedQty > 0) {
+                                            // Release using quantity
+                                            const currentUsingQty = parseFloat(variant.using_quantity) || 0;
+                                            const newUsingQty = Math.max(0, currentUsingQty - allocatedQty);
+                                            
+                                            await supabase
+                                                .from('stock_variants')
+                                                .update({
+                                                    using_quantity: newUsingQty,
+                                                    updated_at: new Date().toISOString()
+                                                })
+                                                .eq('id', variant.id);
+                                            
+                                            // Record consumption
+                                            await supabase
+                                                .from('stock_movements')
+                                                .insert([{
+                                                    variant_id: variant.id,
+                                                    movement_type: 'out',
+                                                    quantity: allocatedQty,
+                                                    remaining_quantity: newUsingQty,
+                                                    reference_type: 'bmr_completion',
+                                                    reference_id: completedBMR.id,
+                                                    movement_date: new Date().toISOString()
+                                                }]);
+                                            
+                                            // Update stock totals
+                                            const { data: stockData, error: stockError } = await supabase
+                                                .from('stocks')
+                                                .select('using_quantity')
+                                                .eq('id', variant.stock_id)
+                                                .single();
+
+                                            if (!stockError) {
+                                                const stockUsingQty = parseFloat(stockData.using_quantity) || 0;
+                                                const newStockUsingQty = Math.max(0, stockUsingQty - allocatedQty);
+                                                
+                                                await supabase
+                                                    .from('stocks')
+                                                    .update({
+                                                        using_quantity: newStockUsingQty,
+                                                        updated_at: new Date().toISOString()
+                                                    })
+                                                    .eq('id', variant.stock_id);
+                                            }
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error(`Error processing variant ${barcode}:`, error);
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            // 5. Add completed product to stock with decimal support
-            const completedProduct = {
-                bare_code: newCompletedProduct.BareCode,
-                part_no: newCompletedProduct.PartNo,
-                lot_no: newCompletedProduct.LotNo,
-                s_no: newCompletedProduct.SNo,
-                name: newCompletedProduct.name,
-                price: parseFloat(totalPrice) || 0,
-                quantity: parseFloat(newCompletedProduct.Quantity) || 1.00,
-                using_quantity: 0,
-                average_price: parseFloat(totalPrice) || 0,
-                total_received: parseFloat(newCompletedProduct.Quantity) || 1.00
-            };
+                    // 5. Add completed product to stock with decimal support
+                    const completedProduct = {
+                        bare_code: newCompletedProduct.BareCode,
+                        part_no: newCompletedProduct.PartNo,
+                        lot_no: newCompletedProduct.LotNo,
+                        s_no: newCompletedProduct.SNo,
+                        name: newCompletedProduct.name,
+                        price: parseFloat(totalPrice) || 0,
+                        quantity: parseFloat(newCompletedProduct.Quantity) || 1.00,
+                        using_quantity: 0,
+                        average_price: parseFloat(totalPrice) || 0,
+                        total_received: parseFloat(newCompletedProduct.Quantity) || 1.00
+                    };
 
-            // Check if completed product already exists in stock
-            const { data: existingStockByBarcode, error: barcodeError } = await supabase
-                .from('stocks')
-                .select('*')
-                .eq('bare_code', completedProduct.bare_code)
-                .single();
+                    // Check if completed product already exists in stock
+                    const { data: existingStockByBarcode, error: barcodeError } = await supabase
+                        .from('stocks')
+                        .select('*')
+                        .eq('bare_code', completedProduct.bare_code)
+                        .single();
 
-            const { data: existingStockByPartNo, error: partNoError } = await supabase
-                .from('stocks')
-                .select('*')
-                .eq('part_no', completedProduct.part_no)
-                .single();
+                    const { data: existingStockByPartNo, error: partNoError } = await supabase
+                        .from('stocks')
+                        .select('*')
+                        .eq('part_no', completedProduct.part_no)
+                        .single();
 
-            let existingStock = existingStockByBarcode || existingStockByPartNo;
-            let stockOperation;
+                    let existingStock = existingStockByBarcode || existingStockByPartNo;
+                    let stockOperation;
 
-            if (existingStock) {
-                // Product exists, update quantity with decimal support
-                const newQuantity = parseFloat(existingStock.quantity) + parseFloat(completedProduct.quantity);
-                const newTotalReceived = parseFloat(existingStock.total_received || 0) + parseFloat(completedProduct.quantity);
-                
-                // Calculate new average price
-                const totalExistingValue = parseFloat(existingStock.quantity) * parseFloat(existingStock.average_price || existingStock.price || 0);
-                const newItemValue = parseFloat(completedProduct.quantity) * parseFloat(completedProduct.price);
-                const newAveragePrice = newQuantity > 0 ? 
-                    (totalExistingValue + newItemValue) / newQuantity : 0;
-                
-                stockOperation = supabase
-                    .from('stocks')
-                    .update({
-                        quantity: newQuantity,
-                        total_received: newTotalReceived,
-                        average_price: newAveragePrice,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', existingStock.id);
-                
-                toast.success('Product quantity updated in stock!');
-            } else {
-                // Product doesn't exist, insert new
-                completedProduct.average_price = parseFloat(completedProduct.price);
-                completedProduct.total_received = parseFloat(completedProduct.quantity);
-                
-                stockOperation = supabase
-                    .from('stocks')
-                    .insert([completedProduct])
-                    .select();
-                
-                toast.success('New product added to stock!');
-            }
+                    if (existingStock) {
+                        // Product exists, update quantity with decimal support
+                        const newQuantity = parseFloat(existingStock.quantity) + parseFloat(completedProduct.quantity);
+                        const newTotalReceived = parseFloat(existingStock.total_received || 0) + parseFloat(completedProduct.quantity);
+                        
+                        // Calculate new average price
+                        const totalExistingValue = parseFloat(existingStock.quantity) * parseFloat(existingStock.average_price || existingStock.price || 0);
+                        const newItemValue = parseFloat(completedProduct.quantity) * parseFloat(completedProduct.price);
+                        const newAveragePrice = newQuantity > 0 ? 
+                            (totalExistingValue + newItemValue) / newQuantity : 0;
+                        
+                        stockOperation = supabase
+                            .from('stocks')
+                            .update({
+                                quantity: newQuantity,
+                                total_received: newTotalReceived,
+                                average_price: newAveragePrice,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', existingStock.id);
+                        
+                        toast.success('Product quantity updated in stock!');
+                    } else {
+                        // Product doesn't exist, insert new
+                        completedProduct.average_price = parseFloat(completedProduct.price);
+                        completedProduct.total_received = parseFloat(completedProduct.quantity);
+                        
+                        stockOperation = supabase
+                            .from('stocks')
+                            .insert([completedProduct])
+                            .select();
+                        
+                        toast.success('New product added to stock!');
+                    }
 
-            // Execute stock operation
-            if (stockOperation) {
-                const { data: stockResult, error: stockOpError } = await stockOperation;
-                if (stockOpError) throw stockOpError;
-                
-                // Also create a variant for the new product
-                if (!existingStock) {
+                    // Execute stock operation
+                    if (stockOperation) {
+                        const { data: stockResult, error: stockOpError } = await stockOperation;
+                        if (stockOpError) throw stockOpError;
+                        
+                        // Also create a variant for the new product
+                        if (!existingStock) {
+                            await supabase
+                                .from('stock_variants')
+                                .insert([{
+                                    stock_id: stockResult[0].id,
+                                    bare_code: completedProduct.bare_code,
+                                    serial_no: completedProduct.s_no,
+                                    lot_no: completedProduct.lot_no,
+                                    batch_no: completedProduct.lot_no || `BATCH-${Date.now()}`,
+                                    price: parseFloat(completedProduct.price),
+                                    quantity: parseFloat(completedProduct.quantity),
+                                    pending_testing: 0,
+                                    using_quantity: 0,
+                                    received_date: new Date().toISOString().split('T')[0],
+                                    testing_status: 'completed'
+                                }]);
+                        }
+                    }
+
+                    // 6. Clean up BMR data
                     await supabase
-                        .from('stock_variants')
-                        .insert([{
-                            stock_id: stockResult[0].id,
-                            bare_code: completedProduct.bare_code,
-                            serial_no: completedProduct.s_no,
-                            lot_no: completedProduct.lot_no,
-                            batch_no: completedProduct.lot_no || `BATCH-${Date.now()}`,
-                            price: parseFloat(completedProduct.price),
-                            quantity: parseFloat(completedProduct.quantity),
-                            pending_testing: 0,
-                            using_quantity: 0,
-                            received_date: new Date().toISOString().split('T')[0],
-                            testing_status: 'completed'
-                        }]);
+                        .from('bmr_template_data')
+                        .delete()
+                        .eq('template_id', completedBMR.id);
+
+                    await supabase
+                        .from('processes')
+                        .delete()
+                        .eq('template_id', completedBMR.id);
+
+                    // 7. Update BMR status to complete
+                    await updateBMRStatus(completedBMR.id, 'complete', completedBMR.productId, completedBMR.assemblyId);
+
+                    // 8. Reset and close modal
+                    setShowCompletionModal(false);
+                    setCompletedBMR(null);
+                    setNewCompletedProduct({
+                        BareCode: "",
+                        PartNo: "",
+                        LotNo: "",
+                        SNo: "",
+                        name: "",
+                        price: "",
+                        Quantity: "1.00"
+                    });
+
+                    // 9. Reload all data
+                    await loadAllData();
+                    
+                    toast.success(`BMR completed successfully! Product added to stock at price: ₹${totalPrice.toFixed(2)}`);
+                } catch (error) {
+                    console.error('Error completing BMR:', error);
+                    toast.error('Error completing BMR: ' + error.message);
                 }
-            }
-
-            // 6. Clean up BMR data
-            await supabase
-                .from('bmr_template_data')
-                .delete()
-                .eq('template_id', completedBMR.id);
-
-            await supabase
-                .from('processes')
-                .delete()
-                .eq('template_id', completedBMR.id);
-
-            // 7. Update BMR status to complete
-            await updateBMRStatus(completedBMR.id, 'complete', completedBMR.productId, completedBMR.assemblyId);
-
-            // 8. Reset and close modal
-            setShowCompletionModal(false);
-            setCompletedBMR(null);
-            setNewCompletedProduct({
-                BareCode: "",
-                PartNo: "",
-                LotNo: "",
-                SNo: "",
-                name: "",
-                price: "",
-                Quantity: "1.00"
-            });
-
-            // 9. Reload all data
-            await loadAllData();
-            
-            toast.success(`BMR completed successfully! Product added to stock at price: ₹${totalPrice.toFixed(2)}`);
-        } catch (error) {
-            console.error('Error completing BMR:', error);
-            toast.error('Error completing BMR: ' + error.message);
-        }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Multiple Handlers Functions
@@ -2796,21 +2918,30 @@ function BMR({
     };
 
     const removeMultipleHandler = (handlerId) => {
-        setMultipleHandlers(prev => prev.filter(handler => handler.id !== handlerId));
-        
-        // Clear timer for removed handler
-        setActiveHandlerTimers(prev => {
-            const newTimers = { ...prev };
-            delete newTimers[handlerId];
-            return newTimers;
+        showConfirmation({
+            title: "Remove Handler",
+            message: "Are you sure you want to remove this handler?",
+            confirmText: "Remove",
+            cancelText: "Cancel",
+            onConfirm: () => {
+                setMultipleHandlers(prev => prev.filter(handler => handler.id !== handlerId));
+                
+                // Clear timer for removed handler
+                setActiveHandlerTimers(prev => {
+                    const newTimers = { ...prev };
+                    delete newTimers[handlerId];
+                    return newTimers;
+                });
+                setHandlerElapsedTimes(prev => {
+                    const newElapsed = { ...prev };
+                    delete newElapsed[handlerId];
+                    return newElapsed;
+                });
+                
+                toast.success('Handler removed!');
+            },
+            onCancel: () => {}
         });
-        setHandlerElapsedTimes(prev => {
-            const newElapsed = { ...prev };
-            delete newElapsed[handlerId];
-            return newElapsed;
-        });
-        
-        toast.success('Handler removed!');
     };
 
     // Save multiple handlers to database
@@ -2952,9 +3083,9 @@ function BMR({
         if (!selectedBMR) return null;
 
         return (
-            <div className="d-flex align-items-center mt-2">
+            <div className="d-flex align-items-center flex-wrap gap-2 mt-3">
                 <button
-                    className="btn btn-sm btn-outline-info me-2"
+                    className="btn btn-outline-info btn-sm"
                     onClick={() => {
                         setGlobalTemplateAction("new");
                         setShowGlobalTemplateModal(true);
@@ -2964,7 +3095,7 @@ function BMR({
                     Global Templates ({globalTemplates.length})
                 </button>
                 <button
-                    className="btn btn-sm btn-outline-warning me-2"
+                    className="btn btn-outline-warning btn-sm"
                     onClick={() => {
                         if (selectedBMR.templateData && selectedBMR.templateData.length > 0) {
                             setGlobalTemplateAction("new");
@@ -2985,13 +3116,13 @@ function BMR({
                     Save as Global Template
                 </button>
                 <button
-                    className="btn btn-sm btn-outline-success me-2"
+                    className="btn btn-outline-success btn-sm"
                     onClick={() => {
                         setGlobalTemplateAction("existing");
                         setShowGlobalTemplateModal(true);
                     }}
                 >
-                    <i className="fa-solid fa-save me-1"></i>
+                    <i className="fa-solid fa-floppy-disk me-1"></i>
                     Save to Existing Template
                 </button>
             </div>
@@ -3008,7 +3139,7 @@ function BMR({
         setSelectedHistoryItem(historyItem);
     };
 
-    // Print History Item with Processes
+    // Print History Item with Processes (UPDATED VERSION)
     const printHistoryItem = (historyItem) => {
         const printWindow = window.open('', '_blank');
         const templateData = historyItem.template_data || [];
@@ -3019,24 +3150,67 @@ function BMR({
                 <head>
                     <title>BMR History - ${historyItem.bmr_name}</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-                        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        .table th, .table td { border: 1px solid #000; padding: 8px; text-align: left; }
-                        .table th { background-color: #f2f2f2; font-weight: bold; }
-                        .no-data { text-align: center; padding: 20px; color: #666; }
-                        .summary { margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 5px; }
-                        .history-info { margin-bottom: 20px; padding: 15px; background-color: #e9f7fe; border-radius: 5px; }
-                        .process-section { margin-top: 30px; }
-                        .process-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        .process-table th, .process-table td { border: 1px solid #000; padding: 6px; text-align: left; }
-                        .process-table th { background-color: #e9ecef; }
+                        body { 
+                            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                            margin: 0; 
+                            padding: 20px; 
+                            font-size: 12px; 
+                            color: #333;
+                        }
+                        .history-header { 
+                            text-align: center; 
+                            margin-bottom: 25px; 
+                            padding-bottom: 15px; 
+                            border-bottom: 2px solid #2c3e50;
+                        }
+                        .history-header h2 { 
+                            color: #2c3e50; 
+                            margin: 0 0 5px 0;
+                            font-size: 20px;
+                        }
+                        .history-header h3 { 
+                            color: #3498db; 
+                            margin: 0 0 15px 0;
+                            font-size: 16px;
+                        }
+                        .history-info { 
+                            display: flex; 
+                            justify-content: space-between;
+                            flex-wrap: wrap;
+                            margin-bottom: 25px; 
+                            padding: 15px; 
+                            border: 1px solid #ddd;
+                            border-radius: 5px;
+                            background-color: #f8f9fa;
+                        }
+                        .history-info p { 
+                            margin: 5px 0; 
+                            flex: 1 0 300px;
+                        }
+                        .history-table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin-top: 15px;
+                        }
+                        .history-table th, .history-table td { 
+                            border: 1px solid #ddd; 
+                            padding: 6px; 
+                            text-align: left;
+                        }
+                        .history-table th { 
+                            background-color: #f8f9fa; 
+                            font-weight: 600;
+                            color: #2c3e50;
+                        }
+                        .history-table tr:nth-child(even) {
+                            background-color: #f8f9fa;
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="header">
-                        <h1>Bill of Material Register - History</h1>
-                        <h2>${historyItem.bmr_name} - ${historyItem.initial_code}</h2>
+                    <div class="history-header">
+                        <h2>BMR HISTORY RECORD</h2>
+                        <h3>${historyItem.bmr_name} - ${historyItem.initial_code}</h3>
                     </div>
                     
                     <div class="history-info">
@@ -3047,138 +3221,117 @@ function BMR({
                     </div>
                     
                     ${templateData.length > 0 ? `
-                        <h3>Template Data</h3>
-                        <table class="table">
+                        <h4 style="color: #2c3e50; margin-bottom: 10px; font-size: 14px;">MATERIALS USED</h4>
+                        <table class="history-table">
                             <thead>
                                 <tr>
-                                    <th>S.NO</th>
-                                    <th>RAW MATERIAL/PART/NAME/PRODUCT CODE</th>
-                                    <th>PartNo/SKU</th>
-                                    <th>INTERNAL SERIAL.NO</th>
-                                    <th>DESCRIPTION</th>
+                                    <th>#</th>
+                                    <th>Raw Material</th>
+                                    <th>Part No</th>
+                                    <th>Internal Serial No</th>
                                     <th>Qty</th>
                                     <th>Price (₹)</th>
                                     <th>Total (₹)</th>
-                                    <th>ISSUED BY</th>
-                                    <th>RECEIVED BY</th>
+                                    <th>Issued By</th>
+                                    <th>Received By</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${templateData.map((item, index) => {
                                     const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
+                                    
                                     return `
                                         <tr>
-                                            <td>${index + 1}</td>
+                                            <td style="text-align: center;">${index + 1}</td>
                                             <td>${item.rawMaterial || ''}</td>
                                             <td>${item.partNo || ''}</td>
                                             <td>${item.internalSerialNo || ''}</td>
-                                            <td>${item.description || ''}</td>
                                             <td>${parseFloat(item.quantity || 1).toFixed(2)}</td>
                                             <td>₹${parseFloat(item.price || 0).toFixed(2)}</td>
-                                            <td>₹${total.toFixed(2)}</td>
-                                            <td>${item.issuedBy || ''}</td>
-                                            <td>${item.receivedBy || ''}</td>
+                                            <td style="text-align: right; font-weight: 600;">₹${total.toFixed(2)}</td>
+                                            <td>${item.issuedBy || 'N/A'}</td>
+                                            <td>${item.receivedBy || 'N/A'}</td>
                                         </tr>
                                     `;
                                 }).join('')}
                             </tbody>
                         </table>
-                        <div class="summary">
-                            <p><strong>Total Items:</strong> ${templateData.length}</p>
-                            <p><strong>Grand Total:</strong> ₹${templateData.reduce((sum, item) => {
-                                return sum + (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
-                            }, 0).toFixed(2)}</p>
-                        </div>
-                    ` : `
-                        <div class="no-data">
-                            <p>No template data available in history.</p>
-                        </div>
-                    `}
+                    ` : ''}
                     
                     ${processesData.length > 0 ? `
-                        <div class="process-section">
-                            <h3>Process Details</h3>
-                            <table class="process-table">
-                                <thead>
-                                    <tr>
-                                        <th>Process Name</th>
-                                        <th>Handler(s)</th>
-                                        <th>Status</th>
-                                        <th>Total Time</th>
-                                        <th>Total Cost (₹)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${processesData.map(process => {
-                                        const handlers = process.handlers || [];
-                                        const hasMultipleHandlers = handlers.length > 0;
-                                        
-                                        let totalProcessTime = 0;
-                                        let totalProcessCost = 0;
-                                        
-                                        if (hasMultipleHandlers) {
-                                            handlers.forEach(handler => {
-                                                totalProcessTime += handler.elapsedTime || 0;
-                                                totalProcessCost += (handler.amount || 0) * ((handler.elapsedTime || 0) / 60000);
-                                            });
-                                        } else {
-                                            totalProcessTime = process.elapsedTime || 0;
-                                            totalProcessCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
-                                        }
-                                        
-                                        return `
-                                            <tr>
-                                                <td><strong>${process.name}</strong></td>
-                                                <td>
-                                                    ${hasMultipleHandlers ? 
-                                                        handlers.map((handler, idx) => `
-                                                            <div class="handler-row">
-                                                                <strong>${handler.name}</strong> 
-                                                                (₹${handler.amount}/min)<br/>
-                                                                Time: ${formatTime(handler.elapsedTime || 0)} | 
-                                                                Cost: ₹${((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)).toFixed(2)} |
-                                                                Status: ${handler.status || 'initiate'}
-                                                            </div>
-                                                        `).join('') :
-                                                        (process.handler || 'N/A')
-                                                    }
-                                                </td>
-                                                <td>${process.status}</td>
-                                                <td>${formatTime(totalProcessTime)}</td>
-                                                <td>₹${totalProcessCost.toFixed(2)}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>
+                        <h4 style="color: #2c3e50; margin: 25px 0 10px 0; font-size: 14px;">PROCESS DETAILS</h4>
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Process Name</th>
+                                    <th>Total Cost (₹)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${processesData.map(process => {
+                                    let totalCost = 0;
+                                    if (process.handlers && process.handlers.length > 0) {
+                                        totalCost = process.handlers.reduce((hSum, handler) => 
+                                            hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
+                                    } else {
+                                        totalCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
+                                    }
+                                    return `
+                                        <tr>
+                                            <td><strong>${process.name}</strong></td>
+                                            <td style="text-align: right; font-weight: 600;">₹${totalCost.toFixed(2)}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
                     ` : ''}
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 10px; color: #666; text-align: center;">
+                        <div>Generated by BMR System | Printed on: ${new Date().toLocaleString()}</div>
+                    </div>
+                    
+                    <script>
+                        // Auto-print and close after delay
+                        setTimeout(() => {
+                            window.print();
+                            setTimeout(() => {
+                                window.close();
+                            }, 500);
+                        }, 500);
+                    </script>
                 </body>
             </html>
         `;
         
         printWindow.document.write(printContent);
         printWindow.document.close();
-        printWindow.print();
     };
 
     // Delete History Item
     const deleteHistoryItem = async (historyId) => {
-        if (!window.confirm('Are you sure you want to delete this history record?')) return;
+        showConfirmation({
+            title: "Delete History Record",
+            message: "Are you sure you want to delete this history record?",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            onConfirm: async () => {
+                try {
+                    const { error } = await supabase
+                        .from('bmr_history')
+                        .delete()
+                        .eq('id', historyId);
 
-        try {
-            const { error } = await supabase
-                .from('bmr_history')
-                .delete()
-                .eq('id', historyId);
+                    if (error) throw error;
 
-            if (error) throw error;
-
-            setBmrHistory(prev => prev.filter(item => item.id !== historyId));
-            toast.success('History record deleted successfully!');
-        } catch (error) {
-            toast.error('Error deleting history record: ' + error.message);
-        }
+                    setBmrHistory(prev => prev.filter(item => item.id !== historyId));
+                    toast.success('History record deleted successfully!');
+                } catch (error) {
+                    toast.error('Error deleting history record: ' + error.message);
+                }
+            },
+            onCancel: () => {}
+        });
     };
 
     // Load saved templates when modal opens
@@ -3252,74 +3405,60 @@ function BMR({
     // Modified BMR Template Table with decimal quantity support
     const renderBMRTemplateTable = () => {
         return (
-            <div className="mb-4">
+            <div className="mb-4 mt-4 fade-in">
                 <h4 className="h5 text-primary">BMR Template Structure</h4>
                 {selectedBMR.templateData && selectedBMR.templateData.length === 0 ? (
                     <div className="alert alert-warning text-center">
                         No products added to template yet. Click "Add Product to Template" to start building your BMR.
                     </div>
                 ) : (
-                    <table className="table table-striped table-hover table-bordered align-middle text-center border-secondary shadow-sm">
-                        <thead>
-                            <tr>
-                                <th>S.NO</th>
-                                <th>RAW MATERIAL/PART/NAME/PRODUCT CODE</th>
-                                <th>PartNo/SKU</th>
-                                <th>INTERNAL SERIAL.NO (Multiple Barcodes)</th>
-                                <th>DESCRIPTION</th>
-                                <th>Total Qty</th>
-                                <th>Avg Price</th>
-                                <th>Total Price</th>
-                                <th>ISSUED BY</th>
-                                <th>RECEIVED BY</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {selectedBMR.templateData && selectedBMR.templateData.map((product, index) => {
-                                // Parse multiple barcodes if comma separated
-                                const barcodes = product.internalSerialNo ? product.internalSerialNo.split(',').map(b => b.trim()) : [];
-                                // Parse variant details if available
-                                let variantDetails = [];
-                                if (product.variantDetails) {
-                                    try {
-                                        variantDetails = typeof product.variantDetails === 'string' 
-                                            ? JSON.parse(product.variantDetails) 
-                                            : product.variantDetails;
-                                    } catch (e) {
-                                        console.error('Error parsing variant details:', e);
-                                    }
-                                }
-                                
-                                const totalQuantity = parseFloat(product.totalQuantity) || parseFloat(product.quantity) || 1.00;
-                                const averagePrice = parseFloat(product.averagePrice) || parseFloat(product.price) || 0;
-                                const totalPrice = totalQuantity * averagePrice;
+                    <div className="table-responsive">
+                        <table className="table bmr-table align-middle text-center">
+                            <thead>
+                                <tr>
+                                    <th>S.NO</th>
+                                    <th>RAW MATERIAL/PART/NAME/PRODUCT CODE</th>
+                                    <th>PartNo/SKU</th>
+                                    <th>INTERNAL SERIAL.NO (Multiple Barcodes)</th>
+                                    <th>DESCRIPTION</th>
+                                    <th>Total Qty</th>
+                                    <th>Avg Price</th>
+                                    <th>Total Price</th>
+                                    <th>ISSUED BY</th>
+                                    <th>RECEIVED BY</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {selectedBMR.templateData && selectedBMR.templateData.map((product, index) => {
+                                    const totalQuantity = parseFloat(product.totalQuantity) || parseFloat(product.quantity) || 1.00;
+                                    const averagePrice = parseFloat(product.averagePrice) || parseFloat(product.price) || 0;
+                                    const totalPrice = totalQuantity * averagePrice;
 
-                                return (
-                                    <tr key={product.id}>
-                                        <td>{index + 1}</td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                value={product.rawMaterial || ''}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'rawMaterial', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Raw material"
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                value={product.partNo || ''}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'partNo', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Part No"
-                                            />
-                                        </td>
-                                        <td>
-                                            <div className="multiple-barcodes-input">
+                                    return (
+                                        <tr key={product.id} className="fade-in">
+                                            <td className="fw-bold">{index + 1}</td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={product.rawMaterial || ''}
+                                                    onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'rawMaterial', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
+                                                    placeholder="Raw material"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={product.partNo || ''}
+                                                    onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'partNo', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
+                                                    placeholder="Part No"
+                                                />
+                                            </td>
+                                            <td>
                                                 <textarea
-                                                    className="form-control form-control-sm"
+                                                    className="form-control bmr-form-control form-control-sm"
                                                     value={product.internalSerialNo || ''}
                                                     onChange={(e) => {
                                                         updateBMRTemplateProduct(selectedBMR.id, index, 'internalSerialNo', e.target.value, selectedProduct.id, selectedMainAssembly.id);
@@ -3327,143 +3466,138 @@ function BMR({
                                                     placeholder="Enter multiple barcodes separated by commas"
                                                     rows="2"
                                                 />
-                                                {barcodes.length > 0 && (
-                                                    <div className="small text-muted mt-1">
-                                                        <strong>Barcodes:</strong> {barcodes.length} barcode(s)
-                                                        {variantDetails.length > 0 && (
-                                                            <div className="mt-1">
-                                                                {variantDetails.map((variant, idx) => (
-                                                                    <span key={idx} className="badge bg-info me-1">
-                                                                        {variant.barcode}: {parseFloat(variant.qty || 1).toFixed(2)} × ₹{parseFloat(variant.price || 0).toFixed(2)}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                value={product.description || ''}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'description', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Description"
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm decimal-input"
-                                                value={totalQuantity.toFixed(2)}
-                                                onChange={(e) => {
-                                                    const value = e.target.value.replace(/[^0-9.]/g, '');
-                                                    const parts = value.split('.');
-                                                    if (parts.length <= 2) {
-                                                        updateBMRTemplateProduct(selectedBMR.id, index, 'totalQuantity', value, selectedProduct.id, selectedMainAssembly.id);
-                                                    }
-                                                }}
-                                                placeholder="0.00"
-                                                pattern="[0-9]*\.?[0-9]{0,2}"
-                                                title="Enter decimal quantity (e.g., 2.5)"
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm decimal-input"
-                                                value={averagePrice.toFixed(2)}
-                                                onChange={(e) => {
-                                                    const value = e.target.value.replace(/[^0-9.]/g, '');
-                                                    const parts = value.split('.');
-                                                    if (parts.length <= 2) {
-                                                        updateBMRTemplateProduct(selectedBMR.id, index, 'averagePrice', value, selectedProduct.id, selectedMainAssembly.id);
-                                                    }
-                                                }}
-                                                placeholder="0.00"
-                                                pattern="[0-9]*\.?[0-9]{0,2}"
-                                                title="Enter average price"
-                                                step="0.01"
-                                            />
-                                        </td>
-                                        <td>
-                                            <div className="text-end">
-                                                <strong>₹{totalPrice.toFixed(2)}</strong>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                value={product.issuedBy || ''}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'issuedBy', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Issued by"
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                value={product.receivedBy || ''}
-                                                onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'receivedBy', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
-                                                placeholder="Received by"
-                                            />
-                                        </td>
-                                        <td>
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={async () => {
-                                                    try {
-                                                        const { error } = await supabase
-                                                            .from('bmr_template_data')
-                                                            .delete()
-                                                            .eq('id', product.id);
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={product.description || ''}
+                                                    onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'description', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
+                                                    placeholder="Description"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={totalQuantity.toFixed(2)}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                                                        const parts = value.split('.');
+                                                        if (parts.length <= 2) {
+                                                            updateBMRTemplateProduct(selectedBMR.id, index, 'totalQuantity', value, selectedProduct.id, selectedMainAssembly.id);
+                                                        }
+                                                    }}
+                                                    placeholder="0.00"
+                                                    pattern="[0-9]*\.?[0-9]{0,2}"
+                                                    title="Enter decimal quantity (e.g., 2.5)"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={averagePrice.toFixed(2)}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                                                        const parts = value.split('.');
+                                                        if (parts.length <= 2) {
+                                                            updateBMRTemplateProduct(selectedBMR.id, index, 'averagePrice', value, selectedProduct.id, selectedMainAssembly.id);
+                                                        }
+                                                    }}
+                                                    placeholder="0.00"
+                                                    pattern="[0-9]*\.?[0-9]{0,2}"
+                                                    title="Enter average price"
+                                                    step="0.01"
+                                                />
+                                            </td>
+                                            <td>
+                                                <div className="text-end">
+                                                    <strong className="text-success">₹{totalPrice.toFixed(2)}</strong>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={product.issuedBy || ''}
+                                                    onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'issuedBy', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
+                                                    placeholder="Issued by"
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="form-control bmr-form-control form-control-sm"
+                                                    value={product.receivedBy || ''}
+                                                    onChange={(e) => updateBMRTemplateProduct(selectedBMR.id, index, 'receivedBy', e.target.value, selectedProduct.id, selectedMainAssembly.id)}
+                                                    placeholder="Received by"
+                                                />
+                                            </td>
+                                            <td>
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    onClick={() => {
+                                                        showConfirmation({
+                                                            title: "Delete Template Item",
+                                                            message: "Are you sure you want to delete this template item?",
+                                                            confirmText: "Delete",
+                                                            cancelText: "Cancel",
+                                                            onConfirm: async () => {
+                                                                try {
+                                                                    const { error } = await supabase
+                                                                        .from('bmr_template_data')
+                                                                        .delete()
+                                                                        .eq('id', product.id);
 
-                                                        if (error) throw error;
+                                                                    if (error) throw error;
 
-                                                        // Update local state
-                                                        const updatedTemplateData = selectedBMR.templateData.filter((_, i) => i !== index);
-                                                        setSelectedBMR(prev => ({
-                                                            ...prev,
-                                                            templateData: updatedTemplateData
-                                                        }));
+                                                                    // Update local state
+                                                                    const updatedTemplateData = selectedBMR.templateData.filter((_, i) => i !== index);
+                                                                    setSelectedBMR(prev => ({
+                                                                        ...prev,
+                                                                        templateData: updatedTemplateData
+                                                                    }));
 
-                                                        // Update bmrProducts state
-                                                        setBmrProducts(prev =>
-                                                            prev.map(p =>
-                                                                p.id === selectedProduct.id
-                                                                    ? {
-                                                                        ...p,
-                                                                        assemblies: p.assemblies.map(a =>
-                                                                            a.id === selectedMainAssembly.id
+                                                                    // Update bmrProducts state
+                                                                    setBmrProducts(prev =>
+                                                                        prev.map(p =>
+                                                                            p.id === selectedProduct.id
                                                                                 ? {
-                                                                                    ...a,
-                                                                                    bmrs: a.bmrs.map(b =>
-                                                                                        b.id === selectedBMR.id
-                                                                                            ? { ...b, templateData: updatedTemplateData }
-                                                                                            : b
+                                                                                    ...p,
+                                                                                    assemblies: p.assemblies.map(a =>
+                                                                                        a.id === selectedMainAssembly.id
+                                                                                            ? {
+                                                                                                ...a,
+                                                                                                bmrs: a.bmrs.map(b =>
+                                                                                                    b.id === selectedBMR.id
+                                                                                                        ? { ...b, templateData: updatedTemplateData }
+                                                                                                        : b
+                                                                                                )
+                                                                                            }
+                                                                                            : a
                                                                                     )
                                                                                 }
-                                                                                : a
-                                                                        )
-                                                                    }
-                                                                    : p
-                                                            )
-                                                        );
-                                                    } catch (error) {
-                                                        toast.error('Error deleting template item: ' + error.message);
-                                                    }
-                                                }}
-                                            >
-                                                <i className="fa-solid fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                                                                : p
+                                                                            )
+                                                                    );
+                                                                } catch (error) {
+                                                                    toast.error('Error deleting template item: ' + error.message);
+                                                                }
+                                                            },
+                                                            onCancel: () => {}
+                                                        });
+                                                    }}
+                                                >
+                                                    <i className="fa-solid fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
         );
@@ -3471,349 +3605,593 @@ function BMR({
 
     if (!activeProductionDepartment) {
         return (
-            <div className="container">
-                <div className="alert alert-warning text-center">
-                    <h4>No Production Department Selected</h4>
-                    <p>Please select a production department from the Production page first.</p>
+            <div className="container mt-5">
+                <div className="card bmr-card">
+                    <div className="card-header bg-primary text-white">
+                        <h4 className="mb-0"><i className="fa-solid fa-industry me-2"></i>No Production Department Selected</h4>
+                    </div>
+                    <div className="card-body text-center py-5">
+                        <i className="fa-solid fa-industry text-muted fa-4x mb-3"></i>
+                        <h5 className="text-muted mb-3">Please select a production department from the Production page first.</h5>
+                        <button 
+                            className="btn btn-primary btn-lg"
+                            onClick={() => window.location.href = '/Production'}
+                        >
+                            <i className="fa-solid fa-arrow-right me-2"></i>
+                            Go to Production Page
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="container">
-            <h1 className="display-5 text-primary">{getPageTitle()}</h1>
-            
-            {/* Status Section */}
-            <div className="StatusP mb-4">
-                <h5>Status :</h5>
-                <span className="dot-status inprogress">In Progress</span>
-                <span className="dot-status testing">Testing</span>
-                <span className="dot-status complete">Complete</span>
-                <button 
-                    className="btn btn-outline-info btn-sm ms-3"
-                    onClick={viewBMRHistory}
-                >
-                    <i className="fa-solid fa-history me-2"></i>
-                    View History ({bmrHistory.length})
-                </button>
-                <button 
-                    className="btn btn-outline-warning btn-sm ms-2"
-                    onClick={() => setShowProcessTemplateModal(true)}
-                >
-                    <i className="fa-solid fa-gear me-2"></i>
-                    Process Templates ({processTemplates.length})
-                </button>
-                <button 
-                    className="btn btn-outline-primary btn-sm ms-2"
-                    onClick={() => setShowGlobalProcessTemplateModal(true)}
-                >
-                    <i className="fa-solid fa-layer-group me-2"></i>
-                    Global Process Templates ({globalProcessTemplates.length})
-                </button>
-                <button 
-                    className="btn btn-outline-success btn-sm ms-2"
-                    onClick={() => {
-                        setGlobalTemplateAction("new");
-                        setShowGlobalTemplateModal(true);
-                    }}
-                >
-                    <i className="fa-solid fa-database me-2"></i>
-                    Global Templates ({globalTemplates.length})
-                </button>
-            </div>
-
-            {/* Products Section */}
-            <div className="ProductsB mb-4">
-                <div className="row">
-                    {bmrProducts.map(product => (
-                        <div key={product.id} className="col-md-4 mb-3">
-                            <div className="card">
-                                <div className="card-body">
-                                    <div className="d-flex justify-content-between align-items-center mb-2">
-                                        <h6 className="card-title mb-0">{product.name}</h6>
-                                        <div>
-                                            <button
-                                                className="btn btn-sm btn-outline-secondary me-1"
-                                                onClick={() => startEditProduct(product)}
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editProductModal"
-                                            >
-                                                <i className="fa-solid fa-pen"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={() => deleteProduct(product.id)}
-                                            >
-                                                <i className="fa-solid fa-trash"></i>
-                                            </button>
-                                        </div>
+        <div className="bmr-container py-4">
+            <div className="container">
+                {/* Header Section - REMOVED STATUS SECTION */}
+                <div className="row mb-4">
+                    <div className="col-12">
+                        <div className="card bmr-card shadow-sm">
+                            <div className="card-header bg-gradient-primary text-white">
+                                <h1 className="h3 mb-0">{getPageTitle()}</h1>
+                            </div>
+                            <div className="card-body">
+                                {/* Add New Product */}
+                                <div className="add-product-section mb-4">
+                                    <div className="input-group">
+                                        <input
+                                            type="text"
+                                            className="form-control bmr-form-control form-control-lg"
+                                            value={newProductName}
+                                            onChange={(e) => setNewProductName(e.target.value)}
+                                            placeholder="Add new product"
+                                            onKeyPress={(e) => e.key === 'Enter' && addNewProduct()}
+                                        />
+                                        <button className="btn btn-primary btn-lg" onClick={addNewProduct}>
+                                            <i className="fa-solid fa-plus me-2"></i>
+                                            Add Product
+                                        </button>
                                     </div>
-                                    
-                                    <small className="text-muted d-block mb-2">
-                                        Assembly Type: {product.hasAssembly ? 'Main & Sub Assembly' : 'Simple Assemblies Only'}
-                                    </small>
-                                    
-                                    {product.hasAssembly ? (
-                                        <div className="Bbutton">
-                                            <button 
-                                                className="btn btn-dark btn-sm me-1"
-                                                onClick={() => addAssembly(product.id, "main")}
-                                            >
-                                                MAIN ASSEMBLY
-                                            </button>
-                                            <button 
-                                                className="btn btn-outline-secondary btn-sm"
-                                                onClick={() => addAssembly(product.id, "sub")}
-                                            >
-                                                SUB ASSEMBLY
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="Bbutton">
-                                            <button 
-                                                className="btn btn-dark btn-sm"
-                                                onClick={() => addAssembly(product.id, "assembly")}
-                                            >
-                                                ADD ASSEMBLY
-                                            </button>
-                                        </div>
-                                    )}
-                                    
-                                    {/* Assemblies */}
-                                    {product.assemblies.map(assembly => (
-                                        <div key={assembly.id} className="mt-2 p-2 border rounded">
-                                            <div className="d-flex justify-content-between align-items-center mb-1">
-                                                <strong>
-                                                    {assembly.name} 
-                                                    <small className="text-muted ms-2">
-                                                        ({assembly.type === 'main' ? 'Main' : assembly.type === 'sub' ? 'Sub' : 'Assembly'})
-                                                    </small>
-                                                </strong>
-                                                <div>
+                                </div>
+                                
+                                <div className="d-flex flex-wrap gap-2">
+                                    <button 
+                                        className="btn btn-outline-info btn-sm"
+                                        onClick={viewBMRHistory}
+                                    >
+                                        <i className="fa-solid fa-history me-2"></i>
+                                        View History ({bmrHistory.length})
+                                    </button>
+                                    <button 
+                                        className="btn btn-outline-warning btn-sm"
+                                        onClick={() => setShowProcessTemplateModal(true)}
+                                    >
+                                        <i className="fa-solid fa-gear me-2"></i>
+                                        Process Templates ({processTemplates.length})
+                                    </button>
+                                    <button 
+                                        className="btn btn-outline-primary btn-sm"
+                                        onClick={() => setShowGlobalProcessTemplateModal(true)}
+                                    >
+                                        <i className="fa-solid fa-layer-group me-2"></i>
+                                        Global Process Templates ({globalProcessTemplates.length})
+                                    </button>
+                                    <button 
+                                        className="btn btn-outline-success btn-sm"
+                                        onClick={() => {
+                                            setGlobalTemplateAction("new");
+                                            setShowGlobalTemplateModal(true);
+                                        }}
+                                    >
+                                        <i className="fa-solid fa-database me-2"></i>
+                                        Global Templates ({globalTemplates.length})
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Products Section */}
+                <div className="products-section mb-4">
+                    <div className="row">
+                        {bmrProducts.length === 0 ? (
+                            <div className="col-12">
+                                <div className="card bmr-card shadow-sm">
+                                    <div className="card-body text-center py-5">
+                                        <i className="fa-solid fa-boxes text-muted fa-4x mb-3"></i>
+                                        <h5 className="text-muted mb-3">No products found</h5>
+                                        <p className="text-muted">Add your first product using the form above</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            bmrProducts.map(product => (
+                                <div key={product.id} className="col-xl-4 col-lg-6 col-md-6 mb-4">
+                                    <div className="card bmr-card h-100 shadow-sm">
+                                        <div className="card-header bg-light">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <h6 className="card-title mb-0 fw-bold text-primary">{product.name}</h6>
+                                                <div className="btn-group">
                                                     <button
-                                                        className="btn btn-sm btn-outline-secondary me-1"
-                                                        onClick={() => startEditAssembly(assembly)}
+                                                        className="btn btn-sm btn-outline-secondary"
+                                                        onClick={() => startEditProduct(product)}
                                                         data-bs-toggle="modal"
-                                                        data-bs-target="#editAssemblyModal"
+                                                        data-bs-target="#editProductModal"
+                                                        title="Edit Product"
                                                     >
                                                         <i className="fa-solid fa-pen"></i>
                                                     </button>
                                                     <button
                                                         className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => deleteAssembly(product.id, assembly.id)}
+                                                        onClick={() => deleteProduct(product.id)}
+                                                        title="Delete Product"
                                                     >
                                                         <i className="fa-solid fa-trash"></i>
                                                     </button>
                                                 </div>
                                             </div>
+                                            <small className="text-dark d-block mt-1">
+                                                <i className="fa-solid fa-layer-group me-1"></i>
+                                                Assembly Type: {product.hasAssembly ? 'Main & Sub Assembly' : 'Simple Assemblies Only'}
+                                            </small>
+                                        </div>
+                                        <div className="card-body">
+                                            {product.hasAssembly ? (
+                                                <div className="assembly-buttons d-grid gap-2 mb-3">
+                                                    <button 
+                                                        className="btn btn-dark btn-sm"
+                                                        onClick={() => addAssembly(product.id, "main")}
+                                                    >
+                                                        <i className="fa-solid fa-layer-group me-2"></i>
+                                                        MAIN ASSEMBLY
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-outline-dark btn-sm"
+                                                        onClick={() => addAssembly(product.id, "sub")}
+                                                    >
+                                                        <i className="fa-solid fa-layer-group me-2"></i>
+                                                        SUB ASSEMBLY
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="assembly-buttons mb-3">
+                                                    <button 
+                                                        className="btn btn-dark btn-sm w-100"
+                                                        onClick={() => addAssembly(product.id, "assembly")}
+                                                    >
+                                                        <i className="fa-solid fa-plus me-2"></i>
+                                                        ADD ASSEMBLY
+                                                    </button>
+                                                </div>
+                                            )}
                                             
-                                            {/* BMRs for this assembly */}
-                                            <div className="Bbutton mt-1">
-                                                {assembly.bmrs.map(bmr => (
-                                                    <div key={bmr.id} className="d-flex align-items-center mb-1">
-                                                        <button
-                                                            className={`btn btn-sm me-1 flex-grow-1 ${
-                                                                bmr.status === 'active' ? 'btn-outline-primary' : 
-                                                                bmr.status === 'inprogress' ? 'btn-warning' : 
-                                                                bmr.status === 'complete' ? 'btn-success' :
-                                                                'btn-outline-secondary'
-                                                            }`}
-                                                            onClick={() => {
-                                                                setSelectedProduct(product);
-                                                                setSelectedMainAssembly(assembly);
-                                                                setSelectedBMR(bmr);
-                                                            }}
-                                                        >
-                                                            {bmr.name}
-                                                            <span className={`badge ms-1 ${
-                                                                bmr.status === 'active' ? 'bg-primary' : 
-                                                                bmr.status === 'inprogress' ? 'bg-warning' : 
-                                                                bmr.status === 'complete' ? 'bg-success' :
-                                                                'bg-secondary'
-                                                            }`}>
-                                                                {bmr.initialCode}
-                                                            </span>
-                                                            {bmr.status === 'inactive' && (
-                                                                <span className="badge bg-dark ms-1">
-                                                                    Inactive
-                                                                </span>
-                                                            )}
-                                                        </button>
-                                                        <div className="btn-group btn-group-sm">
+                                            {/* Assemblies */}
+                                            {product.assemblies.map(assembly => (
+                                                <div key={assembly.id} className={`assembly-item mt-2 p-2 border rounded ${assembly.type === 'main' ? 'assembly-main' : assembly.type === 'sub' ? 'assembly-sub' : 'assembly-simple'}`}>
+                                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                                        <strong className="d-flex align-items-center">
+                                                            <i className="fa-solid fa-cube me-2"></i>
+                                                            {assembly.name} 
+                                                            <small className="text-muted ms-2">
+                                                                ({assembly.type === 'main' ? 'Main' : assembly.type === 'sub' ? 'Sub' : 'Assembly'})
+                                                            </small>
+                                                        </strong>
+                                                        <div className="btn-group">
                                                             <button
-                                                                className="btn btn-outline-secondary"
-                                                                onClick={() => startEditBMR(bmr, product.id, assembly.id)}
+                                                                className="btn btn-sm btn-outline-secondary"
+                                                                onClick={() => startEditAssembly(assembly)}
                                                                 data-bs-toggle="modal"
-                                                                data-bs-target="#editBMRModal"
+                                                                data-bs-target="#editAssemblyModal"
+                                                                title="Edit Assembly"
                                                             >
                                                                 <i className="fa-solid fa-pen"></i>
                                                             </button>
                                                             <button
-                                                                className="btn btn-outline-danger"
-                                                                onClick={() => deleteBMR(bmr.id, product.id, assembly.id)}
+                                                                className="btn btn-sm btn-outline-danger"
+                                                                onClick={() => deleteAssembly(product.id, assembly.id)}
+                                                                title="Delete Assembly"
                                                             >
                                                                 <i className="fa-solid fa-trash"></i>
                                                             </button>
                                                         </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                            
-                                            {/* Add BMR Form */}
-                                            <div className="inputB mt-2">
-                                                <div className="input-group input-group-sm">
-                                                    <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        placeholder="BMR Name"
-                                                        value={newBMR.name}
-                                                        onChange={(e) => setNewBMR(prev => ({ ...prev, name: e.target.value }))}
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        placeholder="Initial Code"
-                                                        value={newBMR.initialCode}
-                                                        onChange={(e) => setNewBMR(prev => ({ ...prev, initialCode: e.target.value }))}
-                                                    />
-                                                    <button
-                                                        className="btn btn-primary"
-                                                        onClick={() => addBMR(product.id, assembly.id)}
+                                                    
+                                                    {/* BMRs for this assembly */}
+                                                    <div className="bmr-list mt-1">
+                                                        {assembly.bmrs.map(bmr => (
+                                                            <div key={bmr.id} className="d-flex align-items-center mb-1">
+                                                                <button
+                                                                    className={`btn btn-sm me-1 flex-grow-1 ${
+                                                                        bmr.status === 'active' ? 'btn-outline-primary' : 
+                                                                        bmr.status === 'inprogress' ? 'btn-warning' : 
+                                                                        bmr.status === 'complete' ? 'btn-success' :
+                                                                        'btn-outline-secondary'
+                                                                    }`}
+                                                                    onClick={() => {
+                                                                        setSelectedProduct(product);
+                                                                        setSelectedMainAssembly(assembly);
+                                                                        setSelectedBMR(bmr);
+                                                                    }}
+                                                                    title={`Click to manage ${bmr.name}`}
+                                                                >
+                                                                    <i className="fa-solid fa-file-contract me-1"></i>
+                                                                    {bmr.name}
+                                                                    <span className={`badge ms-1 ${
+                                                                        bmr.status === 'active' ? 'bg-primary' : 
+                                                                        bmr.status === 'inprogress' ? 'bg-warning' : 
+                                                                        bmr.status === 'complete' ? 'bg-success' :
+                                                                        'bg-secondary'
+                                                                    }`}>
+                                                                        {bmr.initialCode}
+                                                                    </span>
+                                                                    {bmr.status === 'inactive' && (
+                                                                        <span className="badge bg-dark ms-1">
+                                                                            Inactive
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                                <div className="btn-group btn-group-sm">
+                                                                    <button
+                                                                        className="btn btn-outline-secondary"
+                                                                        onClick={() => startEditBMR(bmr, product.id, assembly.id)}
+                                                                        data-bs-toggle="modal"
+                                                                        data-bs-target="#editBMRModal"
+                                                                        title="Edit BMR"
+                                                                    >
+                                                                        <i className="fa-solid fa-pen"></i>
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-outline-danger"
+                                                                        onClick={() => deleteBMR(bmr.id, product.id, assembly.id)}
+                                                                        title="Delete BMR"
+                                                                    >
+                                                                        <i className="fa-solid fa-trash"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    
+                                                    {/* Add BMR Form */}
+                                                    <div className="add-bmr-form mt-2">
+                                                        <div className="input-group input-group-sm">
+                                                            <input
+                                                                type="text"
+                                                                className="form-control bmr-form-control"
+                                                                placeholder="BMR Name"
+                                                                value={newBMR.name}
+                                                                onChange={(e) => setNewBMR(prev => ({ ...prev, name: e.target.value }))}
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                className="form-control bmr-form-control"
+                                                                placeholder="Initial Code"
+                                                                value={newBMR.initialCode}
+                                                                onChange={(e) => setNewBMR(prev => ({ ...prev, initialCode: e.target.value }))}
+                                                            />
+                                                            <button
+                                                                className="btn btn-primary"
+                                                                onClick={() => addBMR(product.id, assembly.id)}
+                                                            >
+                                                                <i className="fa-solid fa-plus"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* BMR Management Section */}
+                {selectedProduct && selectedMainAssembly && selectedBMR && (
+                    <div className="bmr-container mt-4">
+                        <div className="card bmr-card shadow-lg border-primary">
+                            <div className="card-header bg-primary text-white">
+                                <h2 className="h4 mb-0">
+                                    <i className="fa-solid fa-file-contract me-2"></i>
+                                    {selectedProduct.name} ({selectedMainAssembly.name}) - {selectedBMR.name}
+                                </h2>
+                            </div>
+                            <div className="card-body">
+                                <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <div className="btn-group btn-group-sm mt-1">
+                                            <button
+                                                className={`btn ${selectedBMR.status === 'active' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                onClick={() => updateBMRStatus(selectedBMR.id, 'active', selectedProduct.id, selectedMainAssembly.id)}
+                                            >
+                                                Active
+                                            </button>
+                                            <button
+                                                className={`btn ${selectedBMR.status === 'inprogress' ? 'btn-warning' : 'btn-outline-warning'}`}
+                                                onClick={() => updateBMRStatus(selectedBMR.id, 'inprogress', selectedProduct.id, selectedMainAssembly.id)}
+                                            >
+                                                In Progress
+                                            </button>
+                                            <button
+                                                className={`btn ${selectedBMR.status === 'inactive' ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                                                onClick={() => updateBMRStatus(selectedBMR.id, 'inactive', selectedProduct.id, selectedMainAssembly.id)}
+                                            >
+                                                Inactive
+                                            </button>
+                                            <button
+                                                className={`btn ${selectedBMR.status === 'complete' ? 'btn-success' : 'btn-outline-success'}`}
+                                                onClick={() => completeBMR(selectedBMR)}
+                                                disabled={!areAllProcessesCompleted(selectedBMR.id)}
+                                                title={areAllProcessesCompleted(selectedBMR.id) ? "Complete BMR" : "Complete all processes first"}
+                                            >
+                                                Complete
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="d-flex flex-wrap gap-2 mt-2">
+                                        <button
+                                            className="btn btn-sm btn-primary"
+                                            onClick={() => addProductToBMRTemplate(selectedBMR.id, selectedProduct.id, selectedMainAssembly.id)}
+                                        >
+                                            <i className="fa-solid fa-plus me-1"></i>
+                                            Add Product to Template
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-info"
+                                            onClick={() => saveBMRTemplate(selectedBMR.id, selectedProduct.id, selectedMainAssembly.id)}
+                                        >
+                                            <i className="fa-solid fa-save me-1"></i>
+                                            Save Template
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-warning"
+                                            onClick={() => openProcessModal(selectedBMR)}
+                                        >
+                                            <i className="fa-solid fa-gears me-1"></i>
+                                            Processes ({getBMRProcesses(selectedBMR.id).length})
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-info"
+                                            onClick={() => viewSavedTemplate(selectedBMR.id)}
+                                        >
+                                            <i className="fa-solid fa-folder-open me-1"></i>
+                                            View Template
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-success"
+                                            onClick={() => printBMRTemplate(selectedBMR, false)}
+                                            disabled={!selectedBMR.templateData || selectedBMR.templateData.length === 0}
+                                        >
+                                            <i className="fa-solid fa-print me-1"></i>
+                                            Print Template
+                                        </button>
+                                        <button
+                                            className="btn btn-sm btn-outline-primary"
+                                            onClick={() => printBMRTemplate(selectedBMR, true)}
+                                            disabled={!selectedBMR.templateData || selectedBMR.templateData.length === 0}
+                                        >
+                                            <i className="fa-solid fa-print me-1"></i>
+                                            Print with Processes
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* Add Global Template Button */}
+                                {renderGlobalTemplateButtons()}
+
+                                {/* BMR Template Table - Modified to support decimal quantities */}
+                                {renderBMRTemplateTable()}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Confirmation Modal */}
+            {showConfirmModal && (
+                <div className="modal fade show bmr-modal con" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-warning text-white">
+                                <h5 className="modal-title">{confirmConfig.title}</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowConfirmModal(false)}></button>
+                            </div>
+                            <div className="modal-body text-center py-4">
+                                <i className="fa-solid fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                                <p className="lead">{confirmConfig.message}</p>
+                            </div>
+                            <div className="modal-footer justify-content-center">
+                                <button type="button" className="btn btn-secondary" onClick={() => {
+                                    setShowConfirmModal(false);
+                                    confirmConfig.onCancel();
+                                }}>
+                                    {confirmConfig.cancelText}
+                                </button>
+                                <button type="button" className="btn btn-danger" onClick={() => {
+                                    setShowConfirmModal(false);
+                                    confirmConfig.onConfirm();
+                                }}>
+                                    {confirmConfig.confirmText}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Global Process Template Modal - For Process Modal Only (Load Template) */}
+            {showLoadProcessTemplateModal && (
+                <div className="modal load fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                    <div className="modal-dialog modal-xl">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-info text-white">
+                                <h5 className="modal-title">
+                                    <i className="fa-solid fa-layer-group me-2"></i>
+                                    Load Global Process Templates
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => {
+                                    setShowLoadProcessTemplateModal(false);
+                                    setSelectedTemplateForProcess(null);
+                                }}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="card mb-3 border-info">
+                                    <div className="card-header bg-light">
+                                        <h6>Save to Existing Template</h6>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-12">
+                                                <div className="form-floating mb-3">
+                                                    <select
+                                                        className="form-select"
+                                                        value={selectedTemplateForProcess?.id || ""}
+                                                        onChange={(e) => {
+                                                            const template = globalProcessTemplates.find(t => t.id === e.target.value);
+                                                            setSelectedTemplateForProcess(template);
+                                                            if (template) {
+                                                                setNewGlobalProcessTemplate(prev => ({
+                                                                    ...prev,
+                                                                    processes: getBMRProcesses(selectedBMRForProcess?.id) || []
+                                                                }));
+                                                            }
+                                                        }}
                                                     >
-                                                        + Add BMR
+                                                        <option value="">-- Select Existing Template --</option>
+                                                        {globalProcessTemplates.map(template => (
+                                                            <option key={template.id} value={template.id}>
+                                                                {template.name} - {template.processes?.length || 0} processes
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <label>Select Template to Update</label>
+                                                </div>
+                                            </div>
+                                            {selectedTemplateForProcess && (
+                                                <div className="col-md-12">
+                                                    <div className="alert alert-info">
+                                                        <p><strong>Selected Template:</strong> {selectedTemplateForProcess.name}</p>
+                                                        <p><strong>Current Processes:</strong> {selectedTemplateForProcess.processes?.length || 0}</p>
+                                                        <p><strong>New Processes:</strong> {getBMRProcesses(selectedBMRForProcess?.id)?.length || 0}</p>
+                                                        <p className="text-warning">
+                                                            <i className="fa-solid fa-exclamation-triangle me-2"></i>
+                                                            This will replace all existing processes in the template with current BMR processes.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="col-md-12">
+                                                <div className="d-flex gap-2">
+                                                    <button 
+                                                        className="btn btn-primary"
+                                                        onClick={saveToExistingProcessTemplate}
+                                                        disabled={!selectedTemplateForProcess}
+                                                    >
+                                                        <i className="fa-solid fa-save me-2"></i>
+                                                        Save to Selected Template
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-outline-secondary"
+                                                        onClick={() => {
+                                                            setSelectedTemplateForProcess(null);
+                                                        }}
+                                                    >
+                                                        Clear Selection
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
 
-            {/* Add New Product */}
-            <div className="inputB mb-4">
-                <div className="input-group">
-                    <input
-                        type="text"
-                        className="form-control"
-                        value={newProductName}
-                        onChange={(e) => setNewProductName(e.target.value)}
-                        placeholder="Add new product"
-                        onKeyPress={(e) => e.key === 'Enter' && addNewProduct()}
-                    />
-                    <button className="btn btn-success" onClick={addNewProduct}>
-                        <i className="fa-solid fa-plus me-2"></i>
-                        Add Product
-                    </button>
-                </div>
-            </div>
-
-            {/* BMR Management Section */}
-            {selectedProduct && selectedMainAssembly && selectedBMR && (
-                <div className="container mt-4">
-                    <h2 className="h3 text-secondary">
-                        {selectedProduct.name} ({selectedMainAssembly.name}) - {selectedBMR.name}
-                    </h2>
-                    
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <div className="btn-group btn-group-sm mt-1">
-                                <button
-                                    className={`btn ${selectedBMR.status === 'active' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                    onClick={() => updateBMRStatus(selectedBMR.id, 'active', selectedProduct.id, selectedMainAssembly.id)}
-                                >
-                                    Active
-                                </button>
-                                <button
-                                    className={`btn ${selectedBMR.status === 'inprogress' ? 'btn-warning' : 'btn-outline-warning'}`}
-                                    onClick={() => updateBMRStatus(selectedBMR.id, 'inprogress', selectedProduct.id, selectedMainAssembly.id)}
-                                >
-                                    In Progress
-                                </button>
-                                <button
-                                    className={`btn ${selectedBMR.status === 'inactive' ? 'btn-secondary' : 'btn-outline-secondary'}`}
-                                    onClick={() => updateBMRStatus(selectedBMR.id, 'inactive', selectedProduct.id, selectedMainAssembly.id)}
-                                >
-                                    Inactive
-                                </button>
-                                <button
-                                    className={`btn ${selectedBMR.status === 'complete' ? 'btn-success' : 'btn-outline-success'}`}
-                                    onClick={() => completeBMR(selectedBMR)}
-                                    disabled={!areAllProcessesCompleted(selectedBMR.id)}
-                                >
-                                    Complete
+                                <h5 className="mb-3">Available Global Process Templates</h5>
+                                {globalProcessTemplates.length === 0 ? (
+                                    <div className="alert alert-info text-center">
+                                        No global process templates found.
+                                    </div>
+                                ) : (
+                                    <div className="table-responsive">
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Template Name</th>
+                                                    <th>Description</th>
+                                                    <th>Processes</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {globalProcessTemplates.map((template, index) => (
+                                                    <tr key={template.id}>
+                                                        <td className="text-center">{index + 1}</td>
+                                                        <td>
+                                                            <strong>{template.name}</strong>
+                                                            {template.is_public && (
+                                                                <span className="badge bg-success ms-2">Public</span>
+                                                            )}
+                                                        </td>
+                                                        <td>{template.description || 'No description'}</td>
+                                                        <td className="text-center">
+                                                            <span className="badge bg-primary">
+                                                                {template.processes?.length || 0}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="btn-group btn-group-sm">
+                                                                <button
+                                                                    className="btn btn-outline-success me-1"
+                                                                    onClick={() => loadGlobalProcessTemplate(template)}
+                                                                    disabled={!selectedBMRForProcess}
+                                                                    title="Load Template"
+                                                                >
+                                                                    <i className="fa-solid fa-download"></i>
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-outline-info me-1"
+                                                                    onClick={() => {
+                                                                        setSelectedGlobalProcessTemplate(template);
+                                                                    }}
+                                                                    title="View Details"
+                                                                >
+                                                                    <i className="fa-solid fa-eye"></i>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => {
+                                    setShowLoadProcessTemplateModal(false);
+                                    setSelectedTemplateForProcess(null);
+                                }}>
+                                    Close
                                 </button>
                             </div>
-                        </div>
-                        <div>
-                            <button
-                                className="btn btn-sm btn-primary me-2"
-                                onClick={() => addProductToBMRTemplate(selectedBMR.id, selectedProduct.id, selectedMainAssembly.id)}
-                            >
-                                + Add Product to Template
-                            </button>
-                            <button
-                                className="btn btn-sm btn-info me-2"
-                                onClick={() => saveBMRTemplate(selectedBMR.id, selectedProduct.id, selectedMainAssembly.id)}
-                            >
-                                <i className="fa-solid fa-save me-1"></i>
-                                Save Template
-                            </button>
-                            <button
-                                className="btn btn-sm btn-warning me-2"
-                                onClick={() => openProcessModal(selectedBMR)}
-                            >
-                                <i className="fa-solid fa-gears me-1"></i>
-                                Processes ({getBMRProcesses(selectedBMR.id).length})
-                            </button>
-                            <button
-                                className="btn btn-sm btn-outline-info me-2"
-                                onClick={() => viewSavedTemplate(selectedBMR.id)}
-                            >
-                                <i className="fa-solid fa-folder-open me-1"></i>
-                                View Template
-                            </button>
-                            <button
-                                className="btn btn-sm btn-outline-success me-2"
-                                onClick={() => printBMRTemplate(selectedBMR, false)}
-                                disabled={!selectedBMR.templateData || selectedBMR.templateData.length === 0}
-                            >
-                                <i className="fa-solid fa-print me-1"></i>
-                                Print Template
-                            </button>
-                            <button
-                                className="btn btn-sm btn-outline-primary"
-                                onClick={() => printBMRTemplate(selectedBMR, true)}
-                                disabled={!selectedBMR.templateData || selectedBMR.templateData.length === 0}
-                            >
-                                <i className="fa-solid fa-print me-1"></i>
-                                Print with Processes
-                            </button>
                         </div>
                     </div>
-                    
-                    {/* Add Global Template Button */}
-                    {renderGlobalTemplateButtons()}
-
-                    {/* BMR Template Table - Modified to support decimal quantities */}
-                    {renderBMRTemplateTable()}
                 </div>
             )}
 
-            {/* Global Process Template Modal */} 
-            {showGlobalProcessTemplateModal && (
-                <div className="modal v fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+            {/* Global Process Template Modal - Full Version */}
+            {showGlobalProcessTemplateModal && !showLoadProcessTemplateModal && (
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-primary text-white">
                                 <h5 className="modal-title">
-                                    {templateAction === "existing" ? "Save to Existing Template" : "Global Process Templates"} - {activeProductionDepartment}
+                                    <i className="fa-solid fa-layer-group me-2"></i>
+                                    Global Process Templates - {activeProductionDepartment}
                                 </h5>
-                                <button type="button" className="btn-close" onClick={() => {
+                                <button type="button" className="btn-close btn-close-white" onClick={() => {
                                     setShowGlobalProcessTemplateModal(false);
                                     setTemplateAction("new");
                                     setSelectedTemplateForProcess(null);
@@ -3826,322 +4204,181 @@ function BMR({
                                 }}></button>
                             </div>
                             <div className="modal-body">
-                                {templateAction === "existing" ? (
-                                    <div className="card mb-3">
-                                        <div className="card-header">
-                                            <h6>Save to Existing Template</h6>
-                                        </div>
-                                        <div className="card-body">
-                                            <div className="row">
-                                                <div className="col-md-12">
-                                                    <div className="form-floating mb-3">
-                                                        <select
-                                                            className="form-select"
-                                                            value={selectedTemplateForProcess?.id || ""}
-                                                            onChange={(e) => {
-                                                                const template = globalProcessTemplates.find(t => t.id === e.target.value);
-                                                                setSelectedTemplateForProcess(template);
-                                                                if (template) {
-                                                                    setNewGlobalProcessTemplate(prev => ({
-                                                                        ...prev,
-                                                                        processes: getBMRProcesses(selectedBMRForProcess?.id) || []
-                                                                    }));
-                                                                }
-                                                            }}
-                                                        >
-                                                            <option value="">-- Select Existing Template --</option>
-                                                            {globalProcessTemplates.map(template => (
-                                                                <option key={template.id} value={template.id}>
-                                                                    {template.name} - {template.processes?.length || 0} processes
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <label>Select Template to Update</label>
-                                                    </div>
+                                <div className="card mb-3 border-primary">
+                                    <div className="card-header bg-light">
+                                        <h6>Add New Global Process Template</h6>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-8">
+                                                <div className="form-floating mb-3">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control bmr-form-control"
+                                                        placeholder="Template Name"
+                                                        value={newGlobalProcessTemplate.name}
+                                                        onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, name: e.target.value }))}
+                                                    />
+                                                    <label>Template Name *</label>
                                                 </div>
-                                                {selectedTemplateForProcess && (
-                                                    <div className="col-md-12">
-                                                        <div className="alert alert-info">
-                                                            <p><strong>Selected Template:</strong> {selectedTemplateForProcess.name}</p>
-                                                            <p><strong>Current Processes:</strong> {selectedTemplateForProcess.processes?.length || 0}</p>
-                                                            <p><strong>New Processes:</strong> {getBMRProcesses(selectedBMRForProcess?.id)?.length || 0}</p>
-                                                            <p className="text-warning">
-                                                                <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                                                                This will replace all existing processes in the template with current BMR processes.
-                                                            </p>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <div className="form-check form-switch mt-3">
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="checkbox"
+                                                        checked={newGlobalProcessTemplate.is_public}
+                                                        onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, is_public: e.target.checked }))}
+                                                        id="isPublicSwitchProcess"
+                                                    />
+                                                    <label className="form-check-label" htmlFor="isPublicSwitchProcess">
+                                                        Public Template
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <div className="form-floating mb-3">
+                                                    <textarea
+                                                        className="form-control bmr-form-control"
+                                                        placeholder="Description"
+                                                        value={newGlobalProcessTemplate.description}
+                                                        onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, description: e.target.value }))}
+                                                        style={{ height: '100px' }}
+                                                    />
+                                                    <label>Description</label>
+                                                </div>
+                                            </div>
+
+                                            {/* Add Process to Template */}
+                                            <div className="col-md-12">
+                                                <div className="card mb-3">
+                                                    <div className="card-header bg-light">
+                                                        <h6>Add Process to Template</h6>
+                                                    </div>
+                                                    <div className="card-body">
+                                                        <div className="row">
+                                                            <div className="col-md-12">
+                                                                <div className="form-floating mb-3">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control bmr-form-control"
+                                                                        placeholder="Process Name"
+                                                                        value={newProcess.name}
+                                                                        onChange={(e) => setNewProcess(prev => ({ ...prev, name: e.target.value }))}
+                                                                    />
+                                                                    <label>Process Name *</label>
+                                                                </div>
+                                                            </div>
+                                                            <div className="col-md-12">
+                                                                <button 
+                                                                    className="btn btn-primary"
+                                                                    onClick={addProcessToGlobalTemplate}
+                                                                    disabled={!newProcess.name.trim()}
+                                                                >
+                                                                    <i className="fa-solid fa-plus me-2"></i>
+                                                                    Add Process to Template
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                )}
+                                                </div>
+                                            </div>
+
+                                            {/* Template Processes List */}
+                                            {newGlobalProcessTemplate.processes.length > 0 && (
                                                 <div className="col-md-12">
-                                                    <div className="d-flex gap-2">
-                                                        <button 
-                                                            className="btn btn-primary"
-                                                            onClick={saveToExistingProcessTemplate}
-                                                            disabled={!selectedTemplateForProcess}
-                                                        >
-                                                            <i className="fa-solid fa-save me-2"></i>
-                                                            Save to Selected Template
-                                                        </button>
-                                                        <button 
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={() => {
-                                                                setTemplateAction("new");
-                                                                setSelectedTemplateForProcess(null);
-                                                            }}
-                                                        >
-                                                            Back to New Template
-                                                        </button>
+                                                    <h6>Template Processes ({newGlobalProcessTemplate.processes.length})</h6>
+                                                    <div className="table-responsive">
+                                                        <table className="table bmr-table table-sm">
+                                                            <thead className="table-light">
+                                                                <tr>
+                                                                    <th>#</th>
+                                                                    <th>Process Name</th>
+                                                                    <th>Action</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {newGlobalProcessTemplate.processes.map((process, index) => (
+                                                                    <tr key={index}>
+                                                                        <td className="text-center">{index + 1}</td>
+                                                                        <td>{process.name}</td>
+                                                                        <td>
+                                                                            <button
+                                                                                className="btn btn-sm btn-outline-danger"
+                                                                                onClick={() => removeProcessFromGlobalTemplate(index)}
+                                                                            >
+                                                                                <i className="fa-solid fa-trash"></i>
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
                                                     </div>
+                                                </div>
+                                            )}
+
+                                            <div className="col-md-12">
+                                                <div className="d-flex gap-2">
+                                                    <button 
+                                                        className="btn btn-primary"
+                                                        onClick={addGlobalProcessTemplate}
+                                                        disabled={!newGlobalProcessTemplate.name.trim() || newGlobalProcessTemplate.processes.length === 0}
+                                                    >
+                                                        <i className="fa-solid fa-plus me-2"></i>
+                                                        Save as New Template
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="card mb-3">
-                                        <div className="card-header">
-                                            <h6>{selectedGlobalProcessTemplate ? 'View/Load Template' : 'Add New Global Process Template'}</h6>
-                                        </div>
-                                        <div className="card-body">
-                                            {!selectedGlobalProcessTemplate ? (
-                                                <div className="row">
-                                                    <div className="col-md-8">
-                                                        <div className="form-floating mb-3">
-                                                            <input
-                                                                type="text"
-                                                                className="form-control"
-                                                                placeholder="Template Name"
-                                                                value={newGlobalProcessTemplate.name}
-                                                                onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, name: e.target.value }))}
-                                                            />
-                                                            <label>Template Name *</label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-4">
-                                                        <div className="form-check form-switch mt-3">
-                                                            <input
-                                                                className="form-check-input"
-                                                                type="checkbox"
-                                                                checked={newGlobalProcessTemplate.is_public}
-                                                                onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, is_public: e.target.checked }))}
-                                                                id="isPublicSwitchProcess"
-                                                            />
-                                                            <label className="form-check-label" htmlFor="isPublicSwitchProcess">
-                                                                Public Template
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-12">
-                                                        <div className="form-floating mb-3">
-                                                            <textarea
-                                                                className="form-control"
-                                                                placeholder="Description"
-                                                                value={newGlobalProcessTemplate.description}
-                                                                onChange={(e) => setNewGlobalProcessTemplate(prev => ({ ...prev, description: e.target.value }))}
-                                                                style={{ height: '100px' }}
-                                                            />
-                                                            <label>Description</label>
-                                                        </div>
-                                                    </div>
+                                </div>
 
-                                                    {/* Add Process to Template */}
-                                                    <div className="col-md-12">
-                                                        <div className="card mb-3">
-                                                            <div className="card-header">
-                                                                <h6>Add Process to Template</h6>
-                                                            </div>
-                                                            <div className="card-body">
-                                                                <div className="row">
-                                                                    <div className="col-md-12">
-                                                                        <div className="form-floating mb-3">
-                                                                            <input
-                                                                                type="text"
-                                                                                className="form-control"
-                                                                                placeholder="Process Name"
-                                                                                value={newProcess.name}
-                                                                                onChange={(e) => setNewProcess(prev => ({ ...prev, name: e.target.value }))}
-                                                                            />
-                                                                            <label>Process Name *</label>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="col-md-12">
-                                                                        <button 
-                                                                            className="btn btn-primary"
-                                                                            onClick={addProcessToGlobalTemplate}
-                                                                            disabled={!newProcess.name.trim()}
-                                                                        >
-                                                                            <i className="fa-solid fa-plus me-2"></i>
-                                                                            Add Process to Template
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Template Processes List */}
-                                                    {newGlobalProcessTemplate.processes.length > 0 && (
-                                                        <div className="col-md-12">
-                                                            <h6>Template Processes ({newGlobalProcessTemplate.processes.length})</h6>
-                                                            <div className="table-responsive">
-                                                                <table className="table table-sm table-bordered">
-                                                                    <thead>
-                                                                        <tr>
-                                                                            <th>#</th>
-                                                                            <th>Process Name</th>
-                                                                            <th>Action</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {newGlobalProcessTemplate.processes.map((process, index) => (
-                                                                            <tr key={index}>
-                                                                                <td>{index + 1}</td>
-                                                                                <td>{process.name}</td>
-                                                                                <td>
-                                                                                    <button
-                                                                                        className="btn btn-sm btn-outline-danger"
-                                                                                        onClick={() => removeProcessFromGlobalTemplate(index)}
-                                                                                    >
-                                                                                        <i className="fa-solid fa-trash"></i>
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="col-md-12">
-                                                        <div className="d-flex gap-2">
-                                                            <button 
-                                                                className="btn btn-primary"
-                                                                onClick={addGlobalProcessTemplate}
-                                                                disabled={!newGlobalProcessTemplate.name.trim() || newGlobalProcessTemplate.processes.length === 0}
-                                                            >
-                                                                <i className="fa-solid fa-plus me-2"></i>
-                                                                Save as New Template
-                                                            </button>
-                                                            <button 
-                                                                className="btn btn-outline-primary"
-                                                                onClick={() => setTemplateAction("existing")}
-                                                                disabled={!selectedBMRForProcess || getBMRProcesses(selectedBMRForProcess.id).length === 0}
-                                                            >
-                                                                <i className="fa-solid fa-save me-2"></i>
-                                                                Save to Existing Template
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <h6>{selectedGlobalProcessTemplate.name}</h6>
-                                                    <p><strong>Description:</strong> {selectedGlobalProcessTemplate.description}</p>
-                                                    <p><strong>Processes:</strong> {selectedGlobalProcessTemplate.processes?.length || 0}</p>
-                                                    
-                                                    {/* Show Template Processes */}
-                                                    {selectedGlobalProcessTemplate.processes && selectedGlobalProcessTemplate.processes.length > 0 && (
-                                                        <div className="mt-3">
-                                                            <h6>Template Processes</h6>
-                                                            <div className="table-responsive">
-                                                                <table className="table table-sm table-bordered">
-                                                                    <thead>
-                                                                        <tr>
-                                                                            <th>#</th>
-                                                                            <th>Process Name</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {selectedGlobalProcessTemplate.processes.map((process, index) => (
-                                                                            <tr key={index}>
-                                                                                <td>{index + 1}</td>
-                                                                                <td>{process.name}</td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <div className="mt-3">
-                                                        <button
-                                                            className="btn btn-primary me-2"
-                                                            onClick={() => loadGlobalProcessTemplate(selectedGlobalProcessTemplate)}
-                                                            disabled={!selectedBMRForProcess}
-                                                        >
-                                                            <i className="fa-solid fa-download me-2"></i>
-                                                            Load into Current BMR
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={() => setSelectedGlobalProcessTemplate(null)}
-                                                        >
-                                                            Back to List
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <h5>Available Global Process Templates</h5>
+                                <h5 className="mb-3">Available Global Process Templates</h5>
                                 {globalProcessTemplates.length === 0 ? (
                                     <div className="alert alert-info text-center">
                                         No global process templates found. Create your first template above.
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-hover">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Template Name</th>
                                                     <th>Description</th>
                                                     <th>Processes</th>
-                                                    <th>Department</th>
-                                                    <th>Created</th>
                                                     <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {globalProcessTemplates.map((template, index) => (
                                                     <tr key={template.id}>
-                                                        <td>{index + 1}</td>
+                                                        <td className="text-center">{index + 1}</td>
                                                         <td>
                                                             <strong>{template.name}</strong>
                                                             {template.is_public && (
                                                                 <span className="badge bg-success ms-2">Public</span>
                                                             )}
                                                         </td>
-                                                        <td>{template.description}</td>
-                                                        <td>
-                                                            <span className="badge bg-info">
+                                                        <td>{template.description || 'No description'}</td>
+                                                        <td className="text-center">
+                                                            <span className="badge bg-primary">
                                                                 {template.processes?.length || 0}
                                                             </span>
-                                                        </td>
-                                                        <td>{template.department || 'All'}</td>
-                                                        <td>
-                                                            {new Date(template.created_at).toLocaleDateString()}
                                                         </td>
                                                         <td>
                                                             <div className="btn-group btn-group-sm">
                                                                 <button
                                                                     className="btn btn-outline-primary me-1"
-                                                                    onClick={() => setSelectedGlobalProcessTemplate(template)}
+                                                                    onClick={() => {
+                                                                        setSelectedGlobalProcessTemplate(template);
+                                                                    }}
                                                                 >
                                                                     <i className="fa-solid fa-eye"></i>
                                                                 </button>
                                                                 <button
-                                                                    className="btn btn-outline-success me-1"
-                                                                    onClick={() => loadGlobalProcessTemplate(template)}
-                                                                    disabled={!selectedBMRForProcess}
-                                                                >
-                                                                    <i className="fa-solid fa-download"></i>
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-outline-danger"
+                                                                    className="btn btn-outline-danger me-1"
                                                                     onClick={() => deleteGlobalProcessTemplate(template.id)}
                                                                 >
                                                                     <i className="fa-solid fa-trash"></i>
@@ -4175,35 +4412,110 @@ function BMR({
                 </div>
             )}
 
+            {/* View Global Process Template Details */}
+            {selectedGlobalProcessTemplate && (
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                    <div className="modal-dialog modal-lg">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-info text-white">
+                                <h5 className="modal-title">
+                                    <i className="fa-solid fa-eye me-2"></i>
+                                    Template Details - {selectedGlobalProcessTemplate.name}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setSelectedGlobalProcessTemplate(null)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="card mb-3">
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-6">
+                                                <p><strong>Template Name:</strong> {selectedGlobalProcessTemplate.name}</p>
+                                                <p><strong>Description:</strong> {selectedGlobalProcessTemplate.description || 'No description'}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <p><strong>Department:</strong> {selectedGlobalProcessTemplate.department || 'All'}</p>
+                                                <p><strong>Public:</strong> {selectedGlobalProcessTemplate.is_public ? 'Yes' : 'No'}</p>
+                                                <p><strong>Total Processes:</strong> {selectedGlobalProcessTemplate.processes?.length || 0}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {selectedGlobalProcessTemplate.processes?.length > 0 ? (
+                                    <>
+                                        <h5>Process List</h5>
+                                        <div className="table-responsive">
+                                            <table className="table bmr-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>#</th>
+                                                        <th>Process Name</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {selectedGlobalProcessTemplate.processes.map((process, index) => (
+                                                        <tr key={index}>
+                                                            <td>{index + 1}</td>
+                                                            <td><strong>{process.name}</strong></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="alert alert-info text-center">
+                                        No processes in this template.
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setSelectedGlobalProcessTemplate(null)}>
+                                    Close
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => loadGlobalProcessTemplate(selectedGlobalProcessTemplate)}
+                                    disabled={!selectedBMRForProcess}
+                                >
+                                    <i className="fa-solid fa-download me-2"></i>
+                                    Load Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Process Management Modal with Multiple Handlers Support */}
             {showProcessModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-warning text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-gears me-2"></i>
                                     Process Management - {selectedBMRForProcess?.name}
-                                    <span className="badge bg-secondary ms-2">
+                                    <span className="badge bg-light text-dark ms-2">
                                         {getBMRProcesses(selectedBMRForProcess?.id).length} Processes
                                     </span>
                                 </h5>
-                                <button type="button" className="btn-close" onClick={closeProcessModal}></button>
+                                <button type="button" className="btn-close btn-close-white" onClick={closeProcessModal}></button>
                             </div>
                             <div className="modal-body">
-                                <div className="d-flex justify-content-between align-items-center mb-3">
-                                    <div>
+                                <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                                    <div className="d-flex flex-wrap gap-2 mb-2">
                                         <button 
-                                            className="btn btn-primary btn-sm me-2"
+                                            className="btn btn-primary btn-sm"
                                             onClick={openAddProcessModal}
                                         >
                                             <i className="fa-solid fa-plus me-1"></i>
                                             Add New Process
                                         </button>
                                         <button 
-                                            className="btn btn-info btn-sm me-2"
+                                            className="btn btn-info btn-sm"
                                             onClick={() => {
-                                                setTemplateAction("new");
-                                                setShowGlobalProcessTemplateModal(true);
+                                                setShowLoadProcessTemplateModal(true);
                                             }}
                                         >
                                             <i className="fa-solid fa-layer-group me-1"></i>
@@ -4220,7 +4532,8 @@ function BMR({
                                         )}
                                     </div>
                                     <div>
-                                        <span className="badge bg-warning me-2">
+                                        <span className="badge bg-warning text-dark me-2">
+                                            <i className="fa-solid fa-clock me-1"></i>
                                             Active Timers: {Object.keys(activeTimers).length}
                                         </span>
                                         <button 
@@ -4234,12 +4547,11 @@ function BMR({
                                 </div>
 
                                 <div className="table-responsive">
-                                    <table className="table table-striped table-hover table-bordered">
-                                        <thead>
+                                    <table className="table bmr-table table-hover">
+                                        <thead className="table-light">
                                             <tr>
                                                 <th>Process Name</th>
                                                 <th>Handler(s)</th>
-                                                <th>Status</th>
                                                 <th>Timer</th>
                                                 <th>Current Cost</th>
                                                 <th>Total Time</th>
@@ -4248,163 +4560,169 @@ function BMR({
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {getBMRProcesses(selectedBMRForProcess?.id).map(process => {
-                                                const hasMultipleHandlers = process.handlers && process.handlers.length > 0;
-                                                const handlerNames = hasMultipleHandlers 
-                                                    ? process.handlers.map(h => h.name).join(' / ')
-                                                    : (process.handler || 'No handlers');
-                                                
-                                                let totalProcessTime = 0;
-                                                let totalProcessCost = 0;
-                                                
-                                                if (hasMultipleHandlers) {
-                                                    process.handlers.forEach(handler => {
-                                                        totalProcessTime += handler.elapsedTime || 0;
-                                                        totalProcessCost += (handler.amount || 0) * ((handler.elapsedTime || 0) / 60000);
-                                                    });
-                                                } else {
-                                                    totalProcessTime = process.elapsedTime || 0;
-                                                    totalProcessCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
-                                                }
-                                                
-                                                return (
-                                                    <tr key={process.id}>
-                                                        <td>
-                                                            <strong>{process.name}</strong>
-                                                            {hasMultipleHandlers && (
-                                                                <div className="text-muted small">
-                                                                    <i className="fa-solid fa-users me-1"></i>
-                                                                    {process.handlers.length} handler(s)
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td>
-                                                            {hasMultipleHandlers ? (
-                                                                <div className="small">
-                                                                    {process.handlers.map((handler, idx) => (
-                                                                        <div key={idx} className="text-muted">
-                                                                            {handler.name}: ₹{handler.amount}/min
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                `₹${process.amount}/min`
-                                                            )}
-                                                        </td>
-                                                        <td>
-                                                            <span className={`badge ${
-                                                                process.status === 'initiate' ? 'bg-secondary' :
-                                                                process.status === 'inprogress' ? 'bg-warning' :
-                                                                process.status === 'pending' ? 'bg-info' :
-                                                                'bg-success'
-                                                            }`}>
-                                                                {process.status}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <span className="font-monospace">
-                                                                {formatTime(totalProcessTime)}
-                                                            </span>
-                                                        </td>
-                                                        <td>₹{totalProcessCost.toFixed(2)}</td>
-                                                        <td>{process.totalTime || '-'}</td>
-                                                        <td>{process.totalCost ? `₹${process.totalCost}` : '-'}</td>
-                                                        <td>
-                                                            <div className="btn-group btn-group-sm">
-                                                                {!hasMultipleHandlers && (
-                                                                    <>
-                                                                        {process.status === 'initiate' && (
-                                                                            <button
-                                                                                className="btn btn-success"
-                                                                                onClick={() => startTimer(process.id)}
-                                                                                title="Start Process"
-                                                                            >
-                                                                                <i className="fa-solid fa-play"></i>
-                                                                            </button>
-                                                                        )}
-                                                                        {process.status === 'inprogress' && (
-                                                                            <>
-                                                                                <button
-                                                                                    className="btn btn-warning"
-                                                                                    onClick={() => pauseTimer(process.id)}
-                                                                                    title="Pause Process"
-                                                                                >
-                                                                                    <i className="fa-solid fa-pause"></i>
-                                                                                </button>
-                                                                                <button
-                                                                                    className="btn btn-danger"
-                                                                                    onClick={() => stopTimer(process.id)}
-                                                                                    title="Stop Process"
-                                                                                >
-                                                                                    <i className="fa-solid fa-stop"></i>
-                                                                                </button>
-                                                                            </>
-                                                                        )}
-                                                                        {process.status === 'pending' && (
-                                                                            <button
-                                                                                className="btn btn-success"
-                                                                                onClick={() => startTimer(process.id)}
-                                                                                title="Resume Process"
-                                                                            >
-                                                                                <i className="fa-solid fa-play"></i>
-                                                                            </button>
-                                                                        )}
-                                                                    </>
+                                            {getBMRProcesses(selectedBMRForProcess?.id).length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="7" className="text-center py-4">
+                                                        <i className="fa-solid fa-gear fa-2x text-muted mb-3"></i>
+                                                        <p className="text-muted">No processes added yet.</p>
+                                                        <button 
+                                                            className="btn btn-primary btn-sm"
+                                                            onClick={openAddProcessModal}
+                                                        >
+                                                            <i className="fa-solid fa-plus me-1"></i>
+                                                            Add Your First Process
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                getBMRProcesses(selectedBMRForProcess?.id).map(process => {
+                                                    const hasMultipleHandlers = process.handlers && process.handlers.length > 0;
+                                                    const handlerNames = hasMultipleHandlers 
+                                                        ? process.handlers.map(h => h.name).join(' / ')
+                                                        : (process.handler || 'No handlers');
+                                                    
+                                                    let totalProcessTime = 0;
+                                                    let totalProcessCost = 0;
+                                                    
+                                                    if (hasMultipleHandlers) {
+                                                        process.handlers.forEach(handler => {
+                                                            totalProcessTime += handler.elapsedTime || 0;
+                                                            totalProcessCost += (handler.amount || 0) * ((handler.elapsedTime || 0) / 60000);
+                                                        });
+                                                    } else {
+                                                        totalProcessTime = process.elapsedTime || 0;
+                                                        totalProcessCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
+                                                    }
+                                                    
+                                                    return (
+                                                        <tr key={process.id} className={process.status === 'completed' ? 'table-success' : process.status === 'inprogress' ? 'table-warning' : ''}>
+                                                            <td>
+                                                                <strong>{process.name}</strong>
+                                                                {hasMultipleHandlers && (
+                                                                    <div className="text-muted small">
+                                                                        <i className="fa-solid fa-users me-1"></i>
+                                                                        {process.handlers.length} handler(s)
+                                                                    </div>
                                                                 )}
-                                                                <button
-                                                                    className="btn btn-outline-primary"
-                                                                    onClick={() => openMultipleHandlersModal(process)}
-                                                                    title={hasMultipleHandlers ? "Manage Handlers" : "Add Handlers"}
-                                                                >
-                                                                    <i className="fa-solid fa-users"></i>
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-outline-secondary"
-                                                                    onClick={() => startEditProcess(process)}
-                                                                    title="Edit Process"
-                                                                >
-                                                                    <i className="fa-solid fa-pen"></i>
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-outline-danger"
-                                                                    onClick={() => deleteProcess(process.id)}
-                                                                    title="Delete Process"
-                                                                >
-                                                                    <i className="fa-solid fa-trash"></i>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
+                                                            </td>
+                                                            <td>
+                                                                {hasMultipleHandlers ? (
+                                                                    <div className="small">
+                                                                        {process.handlers.map((handler, idx) => (
+                                                                            <div key={idx} className="text-muted">
+                                                                                {handler.name}: ₹{handler.amount}/min
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    `₹${process.amount}/min`
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                <span className="font-monospace timer-display">
+                                                                    {formatTime(totalProcessTime)}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <span className="fw-bold text-success">₹{totalProcessCost.toFixed(2)}</span>
+                                                            </td>
+                                                            <td>{process.totalTime || '-'}</td>
+                                                            <td>{process.totalCost ? `₹${process.totalCost}` : '-'}</td>
+                                                            <td>
+                                                                <div className="btn-group btn-group-sm">
+                                                                    {!hasMultipleHandlers && (
+                                                                        <>
+                                                                            {process.status === 'initiate' && (
+                                                                                <button
+                                                                                    className="btn btn-success"
+                                                                                    onClick={() => startTimer(process.id)}
+                                                                                    title="Start Process"
+                                                                                >
+                                                                                    <i className="fa-solid fa-play"></i>
+                                                                                </button>
+                                                                            )}
+                                                                            {process.status === 'inprogress' && (
+                                                                                <>
+                                                                                    <button
+                                                                                        className="btn btn-warning"
+                                                                                        onClick={() => pauseTimer(process.id)}
+                                                                                        title="Pause Process"
+                                                                                    >
+                                                                                        <i className="fa-solid fa-pause"></i>
+                                                                                    </button>
+                                                                                    <button
+                                                                                        className="btn btn-danger"
+                                                                                        onClick={() => stopTimer(process.id)}
+                                                                                        title="Stop Process"
+                                                                                    >
+                                                                                        <i className="fa-solid fa-stop"></i>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                            {process.status === 'pending' && (
+                                                                                <button
+                                                                                    className="btn btn-success"
+                                                                                    onClick={() => startTimer(process.id)}
+                                                                                    title="Resume Process"
+                                                                                >
+                                                                                    <i className="fa-solid fa-play"></i>
+                                                                                </button>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                    <button
+                                                                        className="btn btn-outline-primary"
+                                                                        onClick={() => openMultipleHandlersModal(process)}
+                                                                        title={hasMultipleHandlers ? "Manage Handlers" : "Add Handlers"}
+                                                                    >
+                                                                        <i className="fa-solid fa-users"></i>
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-outline-secondary"
+                                                                        onClick={() => startEditProcess(process)}
+                                                                        title="Edit Process"
+                                                                    >
+                                                                        <i className="fa-solid fa-pen"></i>
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-outline-danger"
+                                                                        onClick={() => deleteProcess(process.id)}
+                                                                        title="Delete Process"
+                                                                    >
+                                                                        <i className="fa-solid fa-trash"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
-                                {getBMRProcesses(selectedBMRForProcess?.id).length === 0 && (
-                                    <div className="alert alert-info text-center">
-                                        No processes added yet. Click "Add New Process" or "Load Process Template" to create processes.
-                                    </div>
-                                )}
 
                                 {/* Process Summary */}
                                 {getBMRProcesses(selectedBMRForProcess?.id).length > 0 && (
-                                    <div className="card mt-3">
+                                    <div className="card mt-3 border-info">
                                         <div className="card-header bg-info text-white">
-                                            <h6 className="mb-0">Process Summary</h6>
+                                            <h6 className="mb-0"><i className="fa-solid fa-chart-bar me-2"></i>Process Summary</h6>
                                         </div>
                                         <div className="card-body">
                                             <div className="row">
-                                                <div className="col-md-4">
+                                                <div className="col-md-3">
                                                     <p><strong>Total Processes:</strong> {getBMRProcesses(selectedBMRForProcess?.id).length}</p>
                                                 </div>
-                                                <div className="col-md-4">
+                                                <div className="col-md-3">
                                                     <p><strong>Total Handlers:</strong> {getBMRProcesses(selectedBMRForProcess?.id).reduce((sum, process) => 
                                                         sum + (process.handlers?.length || 0), 0)}</p>
                                                 </div>
-                                                <div className="col-md-4">
+                                                <div className="col-md-3">
                                                     <p><strong>Completed:</strong> {getBMRProcesses(selectedBMRForProcess?.id).filter(p => p.status === 'completed').length}</p>
                                                 </div>
-                                                <div className="col-md-12">
+                                                <div className="col-md-3">
+                                                    <p><strong>In Progress:</strong> {getBMRProcesses(selectedBMRForProcess?.id).filter(p => p.status === 'inprogress').length}</p>
+                                                </div>
+                                                <div className="col-md-12 mt-3">
                                                     <div className="progress mb-2">
                                                         <div 
                                                             className="progress-bar bg-success" 
@@ -4435,14 +4753,15 @@ function BMR({
 
             {/* Add/Edit Process Modal */}
             {showAddProcessModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow">
+                            <div className="modal-header bg-primary text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-gear me-2"></i>
                                     {newProcess.id ? 'Edit Process' : 'Add New Process'}
                                 </h5>
-                                <button type="button" className="btn-close" onClick={closeAddProcessModal}></button>
+                                <button type="button" className="btn-close btn-close-white" onClick={closeAddProcessModal}></button>
                             </div>
                             <div className="modal-body">
                                 <div className="row">
@@ -4450,7 +4769,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="Process Name"
                                                 value={newProcess.name}
                                                 onChange={(e) => setNewProcess(prev => ({ ...prev, name: e.target.value }))}
@@ -4461,7 +4780,7 @@ function BMR({
                                     <div className="col-md-12">
                                         <div className="form-floating mb-3">
                                             <select
-                                                className="form-select"
+                                                className="form-select bmr-form-control"
                                                 value={newProcess.handler}
                                                 onChange={(e) => handleHandlerNameChange(e.target.value)}
                                             >
@@ -4506,18 +4825,19 @@ function BMR({
 
             {/* Multiple Handlers Modal */}
             {showMultipleHandlersModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-primary text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-users me-2"></i>
                                     Multiple Handlers - {selectedProcessForMultipleHandlers?.name}
                                 </h5>
-                                <button type="button" className="btn-close" onClick={closeMultipleHandlersModal}></button>
+                                <button type="button" className="btn-close btn-close-white" onClick={closeMultipleHandlersModal}></button>
                             </div>
                             <div className="modal-body">
                                 <div className="card mb-3">
-                                    <div className="card-header">
+                                    <div className="card-header bg-light">
                                         <h6>Add New Handler</h6>
                                     </div>
                                     <div className="card-body">
@@ -4525,7 +4845,7 @@ function BMR({
                                             <div className="col-md-8">
                                                 <div className="form-floating mb-3">
                                                     <select
-                                                        className="form-select"
+                                                        className="form-select bmr-form-control"
                                                         value={newMultipleHandler.name}
                                                         onChange={(e) => {
                                                             const selectedHandler = processTemplates.find(t => t.handler_name === e.target.value);
@@ -4550,7 +4870,7 @@ function BMR({
                                                 <div className="form-floating mb-3">
                                                     <input
                                                         type="number"
-                                                        className="form-control"
+                                                        className="form-control bmr-form-control"
                                                         placeholder="Amount per minute"
                                                         value={newMultipleHandler.amount}
                                                         onChange={(e) => setNewMultipleHandler(prev => ({ ...prev, amount: e.target.value }))}
@@ -4573,22 +4893,22 @@ function BMR({
                                     </div>
                                 </div>
 
-                                <h5>Current Handlers ({multipleHandlers.length})</h5>
+                                <h5 className="mb-3">Current Handlers ({multipleHandlers.length})</h5>
                                 {multipleHandlers.length === 0 ? (
                                     <div className="alert alert-info text-center">
-                                        No handlers added yet. Add handlers from template above.
+                                        <i className="fa-solid fa-users-slash fa-2x mb-3"></i>
+                                        <p>No handlers added yet. Add handlers from template above.</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-hover">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Handler Name</th>
                                                     <th>Amount (₹/min)</th>
                                                     <th>Timer</th>
                                                     <th>Current Cost</th>
-                                                    <th>Status</th>
                                                     <th>Actions</th>
                                                 </tr>
                                             </thead>
@@ -4599,25 +4919,17 @@ function BMR({
                                                     const isTimerActive = activeHandlerTimers[handler.id];
                                                     
                                                     return (
-                                                        <tr key={handler.id}>
-                                                            <td>{index + 1}</td>
-                                                            <td>{handler.name}</td>
-                                                            <td>₹{handler.amount}</td>
+                                                        <tr key={handler.id} className={handler.status === 'completed' ? 'table-success' : handler.status === 'inprogress' ? 'table-warning' : ''}>
+                                                            <td className="text-center">{index + 1}</td>
+                                                            <td><strong>{handler.name}</strong></td>
+                                                            <td className="text-center">₹{handler.amount}</td>
                                                             <td>
-                                                                <span className="font-monospace">
+                                                                <span className="font-monospace timer-display">
                                                                     {formatTime(currentTimer)}
                                                                 </span>
                                                             </td>
-                                                            <td>₹{currentCost}</td>
                                                             <td>
-                                                                <span className={`badge ${
-                                                                    handler.status === 'initiate' ? 'bg-secondary' :
-                                                                    handler.status === 'inprogress' ? 'bg-warning' :
-                                                                    handler.status === 'pending' ? 'bg-info' :
-                                                                    'bg-success'
-                                                                }`}>
-                                                                    {handler.status}
-                                                                </span>
+                                                                <span className="fw-bold text-success">₹{currentCost}</span>
                                                             </td>
                                                             <td>
                                                                 <div className="btn-group btn-group-sm">
@@ -4676,7 +4988,7 @@ function BMR({
 
                                 {/* Handlers Summary */}
                                 {multipleHandlers.length > 0 && (
-                                    <div className="card mt-3">
+                                    <div className="card mt-3 border-warning">
                                         <div className="card-body">
                                             <div className="row">
                                                 <div className="col-md-6">
@@ -4689,13 +5001,17 @@ function BMR({
                                                 </div>
                                                 <div className="col-md-12 mt-2">
                                                     <div className="alert alert-warning mb-0">
-                                                        <strong>Process Total:</strong> 
-                                                        <div>Time: {formatTime(multipleHandlers.reduce((sum, handler) => 
-                                                            sum + (handlerElapsedTimes[handler.id] || handler.elapsedTime || 0), 0))}</div>
-                                                        <div>Cost: ₹{multipleHandlers.reduce((sum, handler) => {
-                                                            const handlerElapsed = handlerElapsedTimes[handler.id] || handler.elapsedTime || 0;
-                                                            return sum + ((handler.amount || 0) * (handlerElapsed / 60000));
-                                                        }, 0).toFixed(2)}</div>
+                                                        <strong><i className="fa-solid fa-calculator me-2"></i>Process Total:</strong> 
+                                                        <div className="mt-1">
+                                                            <strong>Time:</strong> {formatTime(multipleHandlers.reduce((sum, handler) => 
+                                                                sum + (handlerElapsedTimes[handler.id] || handler.elapsedTime || 0), 0))}
+                                                        </div>
+                                                        <div>
+                                                            <strong>Cost:</strong> ₹{multipleHandlers.reduce((sum, handler) => {
+                                                                const handlerElapsed = handlerElapsedTimes[handler.id] || handler.elapsedTime || 0;
+                                                                return sum + ((handler.amount || 0) * (handlerElapsed / 60000));
+                                                            }, 0).toFixed(2)}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -4718,14 +5034,15 @@ function BMR({
 
             {/* Global Template Modal */}
             {showGlobalTemplateModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-primary text-white">
                                 <h5 className="modal-title">
-                                    {globalTemplateAction === "existing" ? "Save to Existing Template" : "Global Templates"} - {activeProductionDepartment}
+                                    <i className="fa-solid fa-database me-2"></i>
+                                    Global Templates - {activeProductionDepartment}
                                 </h5>
-                                <button type="button" className="btn-close" onClick={() => {
+                                <button type="button" className="btn-close btn-close-white" onClick={() => {
                                     setShowGlobalTemplateModal(false);
                                     setGlobalTemplateAction("new");
                                     setSelectedExistingTemplate(null);
@@ -4739,208 +5056,109 @@ function BMR({
                                 }}></button>
                             </div>
                             <div className="modal-body">
-                                {globalTemplateAction === "existing" ? (
-                                    <div className="card mb-3">
-                                        <div className="card-header">
-                                            <h6>Save to Existing Template</h6>
-                                        </div>
-                                        <div className="card-body">
-                                            <div className="row">
-                                                <div className="col-md-12">
-                                                    <div className="form-floating mb-3">
-                                                        <select
-                                                            className="form-select"
-                                                            value={selectedExistingTemplate?.id || ""}
-                                                            onChange={(e) => {
-                                                                const template = globalTemplates.find(t => t.id === e.target.value);
-                                                                setSelectedExistingTemplate(template);
-                                                                if (template) {
-                                                                    setNewGlobalTemplate(prev => ({
-                                                                        ...prev,
-                                                                        template_data: selectedBMR?.templateData || []
-                                                                    }));
-                                                                }
-                                                            }}
-                                                        >
-                                                            <option value="">-- Select Existing Template --</option>
-                                                            {globalTemplates.map(template => (
-                                                                <option key={template.id} value={template.id}>
-                                                                    {template.name} ({template.category}) - {template.template_data?.length || 0} items
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <label>Select Template to Update</label>
-                                                    </div>
+                                <div className="card mb-3 border-primary">
+                                    <div className="card-header bg-light">
+                                        <h6>Add New Global Template</h6>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-6">
+                                                <div className="form-floating mb-3">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control bmr-form-control"
+                                                        placeholder="Template Name"
+                                                        value={newGlobalTemplate.name}
+                                                        onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, name: e.target.value }))}
+                                                    />
+                                                    <label>Template Name *</label>
                                                 </div>
-                                                {selectedExistingTemplate && (
-                                                    <div className="col-md-12">
-                                                        <div className="alert alert-info">
-                                                            <p><strong>Selected Template:</strong> {selectedExistingTemplate.name}</p>
-                                                            <p><strong>Current Items:</strong> {selectedExistingTemplate.template_data?.length || 0}</p>
-                                                            <p><strong>New Items:</strong> {selectedBMR?.templateData?.length || 0}</p>
-                                                            <p className="text-warning">
-                                                                <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                                                                This will replace all existing data in the template with current BMR data.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                <div className="col-md-12">
-                                                    <div className="d-flex gap-2">
-                                                        <button 
-                                                            className="btn btn-primary"
-                                                            onClick={saveToExistingTemplate}
-                                                            disabled={!selectedExistingTemplate}
-                                                        >
-                                                            <i className="fa-solid fa-save me-2"></i>
-                                                            Save to Selected Template
-                                                        </button>
-                                                        <button 
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={() => {
-                                                                setGlobalTemplateAction("new");
-                                                                setSelectedExistingTemplate(null);
-                                                            }}
-                                                        >
-                                                            Back to New Template
-                                                        </button>
-                                                    </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="form-floating mb-3">
+                                                    <input
+                                                        type="text"
+                                                        className="form-control bmr-form-control"
+                                                        placeholder="Category"
+                                                        value={newGlobalTemplate.category}
+                                                        onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, category: e.target.value }))}
+                                                    />
+                                                    <label>Category</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <div className="form-floating mb-3">
+                                                    <textarea
+                                                        className="form-control bmr-form-control"
+                                                        placeholder="Description"
+                                                        value={newGlobalTemplate.description}
+                                                        onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, description: e.target.value }))}
+                                                        style={{ height: '100px' }}
+                                                    />
+                                                    <label>Description</label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <div className="form-check form-switch">
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="checkbox"
+                                                        checked={newGlobalTemplate.is_public}
+                                                        onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, is_public: e.target.checked }))}
+                                                        id="isPublicSwitch"
+                                                    />
+                                                    <label className="form-check-label" htmlFor="isPublicSwitch">
+                                                        Public Template (Visible to all departments)
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <div className="d-flex gap-2">
+                                                    <button 
+                                                        className="btn btn-primary"
+                                                        onClick={addGlobalTemplate}
+                                                        disabled={!newGlobalTemplate.name.trim() || !selectedBMR?.templateData?.length}
+                                                    >
+                                                        <i className="fa-solid fa-plus me-2"></i>
+                                                        Save as New Template
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-outline-primary"
+                                                        onClick={() => setGlobalTemplateAction("existing")}
+                                                        disabled={!selectedBMR?.templateData?.length}
+                                                    >
+                                                        <i className="fa-solid fa-save me-2"></i>
+                                                        Save to Existing Template
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="card mb-3">
-                                        <div className="card-header">
-                                            <h6>{selectedGlobalTemplate ? 'View/Use Template' : 'Add New Global Template'}</h6>
-                                        </div>
-                                        <div className="card-body">
-                                            {!selectedGlobalTemplate ? (
-                                                <div className="row">
-                                                    <div className="col-md-6">
-                                                        <div className="form-floating mb-3">
-                                                            <input
-                                                                type="text"
-                                                                className="form-control"
-                                                                placeholder="Template Name"
-                                                                value={newGlobalTemplate.name}
-                                                                onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, name: e.target.value }))}
-                                                            />
-                                                            <label>Template Name *</label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-6">
-                                                        <div className="form-floating mb-3">
-                                                            <input
-                                                                type="text"
-                                                                className="form-control"
-                                                                placeholder="Category"
-                                                                value={newGlobalTemplate.category}
-                                                                onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, category: e.target.value }))}
-                                                            />
-                                                            <label>Category</label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-12">
-                                                        <div className="form-floating mb-3">
-                                                            <textarea
-                                                                className="form-control"
-                                                                placeholder="Description"
-                                                                value={newGlobalTemplate.description}
-                                                                onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, description: e.target.value }))}
-                                                                style={{ height: '100px' }}
-                                                            />
-                                                            <label>Description</label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-6">
-                                                        <div className="form-check form-switch">
-                                                            <input
-                                                                className="form-check-input"
-                                                                type="checkbox"
-                                                                checked={newGlobalTemplate.is_public}
-                                                                onChange={(e) => setNewGlobalTemplate(prev => ({ ...prev, is_public: e.target.checked }))}
-                                                                id="isPublicSwitch"
-                                                            />
-                                                            <label className="form-check-label" htmlFor="isPublicSwitch">
-                                                                Public Template (Visible to all departments)
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div className="col-md-12">
-                                                        <div className="d-flex gap-2">
-                                                            <button 
-                                                                className="btn btn-primary"
-                                                                onClick={addGlobalTemplate}
-                                                                disabled={!newGlobalTemplate.name.trim() || !selectedBMR?.templateData?.length}
-                                                            >
-                                                                <i className="fa-solid fa-plus me-2"></i>
-                                                                Save as New Template
-                                                            </button>
-                                                            <button 
-                                                                className="btn btn-outline-primary"
-                                                                onClick={() => setGlobalTemplateAction("existing")}
-                                                                disabled={!selectedBMR?.templateData?.length}
-                                                            >
-                                                                <i className="fa-solid fa-save me-2"></i>
-                                                                Save to Existing Template
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <h6>{selectedGlobalTemplate.name}</h6>
-                                                    <p><strong>Category:</strong> {selectedGlobalTemplate.category}</p>
-                                                    <p><strong>Description:</strong> {selectedGlobalTemplate.description}</p>
-                                                    <p><strong>Items:</strong> {selectedGlobalTemplate.template_data?.length || 0}</p>
-                                                    
-                                                    <div className="mt-3">
-                                                        <button
-                                                            className="btn btn-primary me-2"
-                                                            onClick={() => loadGlobalTemplate(selectedGlobalTemplate)}
-                                                            disabled={!selectedBMR}
-                                                        >
-                                                            <i className="fa-solid fa-download me-2"></i>
-                                                            Load into Current BMR
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-outline-secondary"
-                                                            onClick={() => setSelectedGlobalTemplate(null)}
-                                                        >
-                                                            Back to List
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
+                                </div>
 
-                                <h5>Available Global Templates</h5>
+                                <h5 className="mb-3">Available Global Templates</h5>
                                 {globalTemplates.length === 0 ? (
                                     <div className="alert alert-info text-center">
-                                        No global templates found. Create your first template above.
+                                        <i className="fa-solid fa-database fa-2x mb-3"></i>
+                                        <p>No global templates found. Create your first template above.</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-hover">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Template Name</th>
                                                     <th>Category</th>
                                                     <th>Description</th>
                                                     <th>Items</th>
-                                                    <th>Department</th>
-                                                    <th>Created</th>
                                                     <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {globalTemplates.map((template, index) => (
                                                     <tr key={template.id}>
-                                                        <td>{index + 1}</td>
+                                                        <td className="text-center">{index + 1}</td>
                                                         <td>
                                                             <strong>{template.name}</strong>
                                                             {template.is_public && (
@@ -4948,21 +5166,18 @@ function BMR({
                                                             )}
                                                         </td>
                                                         <td>{template.category}</td>
-                                                        <td>{template.description}</td>
-                                                        <td>
-                                                            <span className="badge bg-info">
+                                                        <td>{template.description || 'No description'}</td>
+                                                        <td className="text-center">
+                                                            <span className="badge bg-primary">
                                                                 {template.template_data?.length || 0}
                                                             </span>
-                                                        </td>
-                                                        <td>{template.department || 'All'}</td>
-                                                        <td>
-                                                            {new Date(template.created_at).toLocaleDateString()}
                                                         </td>
                                                         <td>
                                                             <div className="btn-group btn-group-sm">
                                                                 <button
                                                                     className="btn btn-outline-primary me-1"
-                                                                    onClick={() => setSelectedGlobalTemplate(template)}
+                                                                    onClick={() => viewGlobalTemplate(template)}
+                                                                    title="View Template"
                                                                 >
                                                                     <i className="fa-solid fa-eye"></i>
                                                                 </button>
@@ -4970,12 +5185,14 @@ function BMR({
                                                                     className="btn btn-outline-success me-1"
                                                                     onClick={() => loadGlobalTemplate(template)}
                                                                     disabled={!selectedBMR}
+                                                                    title="Load into BMR"
                                                                 >
                                                                     <i className="fa-solid fa-download"></i>
                                                                 </button>
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => deleteGlobalTemplate(template.id)}
+                                                                    title="Delete Template"
                                                                 >
                                                                     <i className="fa-solid fa-trash"></i>
                                                                 </button>
@@ -5009,18 +5226,116 @@ function BMR({
                 </div>
             )}
 
-            {/* Process Template Modal */}
-            {showProcessTemplateModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
-                    <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Process Templates - {activeProductionDepartment}</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowProcessTemplateModal(false)}></button>
+            {/* View Global Template Modal */}
+            {showViewGlobalTemplateModal && selectedGlobalTemplate && (
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                    <div className="modal-dialog modal-xl">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-info text-white">
+                                <h5 className="modal-title">
+                                    <i className="fa-solid fa-eye me-2"></i>
+                                    View Template - {selectedGlobalTemplate.name}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowViewGlobalTemplateModal(false)}></button>
                             </div>
                             <div className="modal-body">
                                 <div className="card mb-3">
-                                    <div className="card-header">
+                                    <div className="card-body">
+                                        <div className="row">
+                                            <div className="col-md-6">
+                                                <p><strong>Template Name:</strong> {selectedGlobalTemplate.name}</p>
+                                                <p><strong>Category:</strong> {selectedGlobalTemplate.category}</p>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <p><strong>Department:</strong> {selectedGlobalTemplate.department || 'All'}</p>
+                                                <p><strong>Public:</strong> {selectedGlobalTemplate.is_public ? 'Yes' : 'No'}</p>
+                                            </div>
+                                            <div className="col-md-12">
+                                                <p><strong>Description:</strong> {selectedGlobalTemplate.description}</p>
+                                                <p><strong>Total Items:</strong> {selectedGlobalTemplate.template_data?.length || 0}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <h5>Template Data</h5>
+                                {selectedGlobalTemplate.template_data?.length > 0 ? (
+                                    <div className="table-responsive">
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Raw Material</th>
+                                                    <th>Part No</th>
+                                                    <th>Internal Serial No</th>
+                                                    <th>Description</th>
+                                                    <th>Qty</th>
+                                                    <th>Price (₹)</th>
+                                                    <th>Total (₹)</th>
+                                                    <th>Issued By</th>
+                                                    <th>Received By</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {selectedGlobalTemplate.template_data.map((item, index) => {
+                                                    const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
+                                                    return (
+                                                        <tr key={index}>
+                                                            <td className="text-center">{index + 1}</td>
+                                                            <td>{item.rawMaterial || ''}</td>
+                                                            <td>{item.partNo || ''}</td>
+                                                            <td>{item.internalSerialNo || ''}</td>
+                                                            <td>{item.description || ''}</td>
+                                                            <td className="text-center">{parseFloat(item.quantity || 1).toFixed(2)}</td>
+                                                            <td className="text-end">₹{parseFloat(item.price || 0).toFixed(2)}</td>
+                                                            <td className="text-end fw-bold text-success">₹{total.toFixed(2)}</td>
+                                                            <td>{item.issuedBy || 'N/A'}</td>
+                                                            <td>{item.receivedBy || 'N/A'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="alert alert-info text-center">
+                                        No template data available.
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowViewGlobalTemplateModal(false)}>
+                                    Close
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => loadGlobalTemplate(selectedGlobalTemplate)}
+                                    disabled={!selectedBMR}
+                                >
+                                    <i className="fa-solid fa-download me-2"></i>
+                                    Load into Current BMR
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Process Template Modal */}
+            {showProcessTemplateModal && (
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                    <div className="modal-dialog modal-lg">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-warning text-white">
+                                <h5 className="modal-title">
+                                    <i className="fa-solid fa-gear me-2"></i>
+                                    Process Templates - {activeProductionDepartment}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowProcessTemplateModal(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="card mb-3 border-warning">
+                                    <div className="card-header bg-light">
                                         <h6>Add New Process Template</h6>
                                     </div>
                                     <div className="card-body">
@@ -5029,7 +5344,7 @@ function BMR({
                                                 <div className="form-floating mb-3">
                                                     <input
                                                         type="text"
-                                                        className="form-control"
+                                                        className="form-control bmr-form-control"
                                                         placeholder="Handler Name"
                                                         value={newProcessTemplate.handler_name}
                                                         onChange={(e) => setNewProcessTemplate(prev => ({ ...prev, handler_name: e.target.value }))}
@@ -5041,7 +5356,7 @@ function BMR({
                                                 <div className="form-floating mb-3">
                                                     <input
                                                         type="number"
-                                                        className="form-control"
+                                                        className="form-control bmr-form-control"
                                                         placeholder="Amount per minute"
                                                         value={newProcessTemplate.amount}
                                                         onChange={(e) => setNewProcessTemplate(prev => ({ ...prev, amount: e.target.value }))}
@@ -5058,38 +5373,36 @@ function BMR({
                                     </div>
                                 </div>
 
-                                <h5>Existing Templates</h5>
+                                <h5 className="mb-3">Existing Templates</h5>
                                 {processTemplates.length === 0 ? (
                                     <div className="alert alert-info text-center">
-                                        No process templates found. Add your first template above.
+                                        <i className="fa-solid fa-gear fa-2x mb-3"></i>
+                                        <p>No process templates found. Add your first template above.</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-hover">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Handler Name</th>
                                                     <th>Amount (₹/min)</th>
-                                                    <th>Created</th>
                                                     <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {processTemplates.map((template, index) => (
                                                     <tr key={template.id}>
-                                                        <td>{index + 1}</td>
+                                                        <td className="text-center">{index + 1}</td>
                                                         <td>
                                                             <strong>{template.handler_name}</strong>
                                                         </td>
-                                                        <td>₹{template.amount}</td>
-                                                        <td>
-                                                            {new Date(template.created_at).toLocaleDateString()}
-                                                        </td>
+                                                        <td className="text-end">₹{template.amount}</td>
                                                         <td>
                                                             <button
                                                                 className="btn btn-sm btn-outline-danger"
                                                                 onClick={() => deleteProcessTemplate(template.id)}
+                                                                title="Delete Template"
                                                             >
                                                                 <i className="fa-solid fa-trash"></i>
                                                             </button>
@@ -5113,16 +5426,17 @@ function BMR({
 
             {/* Saved Template Modal for Individual BMR */}
             {selectedSavedTemplate && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-info text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-folder-open me-2"></i>
                                     Saved Template - {selectedSavedTemplate.name}
                                 </h5>
                                 <button 
                                     type="button" 
-                                    className="btn-close" 
+                                    className="btn-close btn-close-white" 
                                     onClick={() => setSelectedSavedTemplate(null)}
                                 ></button>
                             </div>
@@ -5132,48 +5446,48 @@ function BMR({
                                         <div className="card mb-3">
                                             <div className="card-body">
                                                 <h6>Template Information</h6>
-                                                <p><strong>Product:</strong> {selectedSavedTemplate.productName}</p>
-                                                <p><strong>Assembly:</strong> {selectedSavedTemplate.assemblyName}</p>
-                                                <p><strong>Saved:</strong> {new Date(selectedSavedTemplate.savedAt).toLocaleString()}</p>
-                                                <p><strong>Items:</strong> {selectedSavedTemplate.templateData?.length || 0}</p>
+                                                <div className="row">
+                                                    <div className="col-md-6">
+                                                        <p><strong>Product:</strong> {selectedSavedTemplate.productName}</p>
+                                                        <p><strong>Assembly:</strong> {selectedSavedTemplate.assemblyName}</p>
+                                                    </div>
+                                                    <div className="col-md-6">
+                                                        <p><strong>Saved:</strong> {new Date(selectedSavedTemplate.savedAt).toLocaleString()}</p>
+                                                        <p><strong>Items:</strong> {selectedSavedTemplate.templateData?.length || 0}</p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         
                                         <h5>Template Data</h5>
                                         {selectedSavedTemplate.templateData?.length > 0 ? (
                                             <div className="table-responsive">
-                                                <table className="table table-sm table-bordered">
-                                                    <thead>
+                                                <table className="table bmr-table table-hover">
+                                                    <thead className="table-light">
                                                         <tr>
                                                             <th>#</th>
                                                             <th>Raw Material</th>
                                                             <th>Part No</th>
-                                                            <th>Internal S/N</th>
+                                                            <th>Internal Serial No</th>
                                                             <th>Description</th>
                                                             <th>Qty</th>
                                                             <th>Price</th>
                                                             <th>Issued By</th>
+                                                            <th>Received By</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {selectedSavedTemplate.templateData?.map((item, index) => (
                                                             <tr key={index}>
-                                                                <td>{index + 1}</td>
+                                                                <td className="text-center">{index + 1}</td>
                                                                 <td>{item.rawMaterial || 'N/A'}</td>
                                                                 <td>{item.partNo || 'N/A'}</td>
-                                                                <td>
-                                                                    <span className={`badge ${item.internalSerialNo ? 'bg-success' : 'bg-warning'}`}>
-                                                                        {item.internalSerialNo || 'No Barcode'}
-                                                                    </span>
-                                                                </td>
+                                                                <td>{item.internalSerialNo || 'N/A'}</td>
                                                                 <td>{item.description || 'N/A'}</td>
-                                                                <td>{parseFloat(item.quantity || 1).toFixed(2)}</td>
-                                                                <td>₹{item.price || 0}</td>
-                                                                <td>
-                                                                    <span className={`badge ${item.issuedBy ? 'bg-primary' : 'bg-secondary'}`}>
-                                                                        {item.issuedBy || 'Not Issued'}
-                                                                    </span>
-                                                                </td>
+                                                                <td className="text-center">{parseFloat(item.quantity || 1).toFixed(2)}</td>
+                                                                <td className="text-end">₹{item.price || 0}</td>
+                                                                <td>{item.issuedBy || 'N/A'}</td>
+                                                                <td>{item.receivedBy || 'N/A'}</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -5206,8 +5520,17 @@ function BMR({
                                 <button
                                     className="btn btn-outline-danger"
                                     onClick={() => {
-                                        deleteSavedTemplate(selectedSavedTemplate.id);
-                                        setSelectedSavedTemplate(null);
+                                        showConfirmation({
+                                            title: "Delete Saved Template",
+                                            message: "Are you sure you want to delete this saved template?",
+                                            confirmText: "Delete",
+                                            cancelText: "Cancel",
+                                            onConfirm: () => {
+                                                deleteSavedTemplate(selectedSavedTemplate.id);
+                                                setSelectedSavedTemplate(null);
+                                            },
+                                            onCancel: () => {}
+                                        });
                                     }}
                                 >
                                     <i className="fa-solid fa-trash me-2"></i>
@@ -5221,16 +5544,17 @@ function BMR({
 
             {/* BMR History Modal with Filters */}
             {showHistoryModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-primary text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-history me-2"></i>
                                     BMR History - {activeProductionDepartment}
                                 </h5>
                                 <button 
                                     type="button" 
-                                    className="btn-close" 
+                                    className="btn-close btn-close-white" 
                                     onClick={() => setShowHistoryModal(false)}
                                 ></button>
                             </div>
@@ -5242,7 +5566,7 @@ function BMR({
                                             <div className="col-md-6">
                                                 <div className="form-floating mb-3">
                                                     <select
-                                                        className="form-select"
+                                                        className="form-select bmr-form-control"
                                                         value={historyFilter.assemblyType}
                                                         onChange={(e) => setHistoryFilter(prev => ({ ...prev, assemblyType: e.target.value }))}
                                                     >
@@ -5252,13 +5576,13 @@ function BMR({
                                                         <option value="assembly">Simple Assembly Only</option>
                                                     </select>
                                                     <label>Filter by Assembly Type</label>
-                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="col-md-6">
                                                 <div className="form-floating mb-3">
                                                     <input
                                                         type="text"
-                                                        className="form-control"
+                                                        className="form-control bmr-form-control"
                                                         placeholder="Search BMR, Product, Assembly..."
                                                         value={historyFilter.searchTerm}
                                                         onChange={(e) => setHistoryFilter(prev => ({ ...prev, searchTerm: e.target.value }))}
@@ -5272,12 +5596,13 @@ function BMR({
 
                                 {getFilteredHistory().length === 0 ? (
                                     <div className="alert alert-info text-center">
-                                        No BMR history found matching your criteria.
+                                        <i className="fa-solid fa-history fa-2x mb-3"></i>
+                                        <p>No BMR history found matching your criteria.</p>
                                     </div>
                                 ) : (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-hover">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>BMR Name</th>
@@ -5285,7 +5610,6 @@ function BMR({
                                                     <th>Product</th>
                                                     <th>Assembly</th>
                                                     <th>Items</th>
-                                                    <th>Processes</th>
                                                     <th>Completed Date</th>
                                                     <th>Actions</th>
                                                 </tr>
@@ -5293,7 +5617,7 @@ function BMR({
                                             <tbody>
                                                 {getFilteredHistory().map((history, index) => (
                                                     <tr key={history.id}>
-                                                        <td>{index + 1}</td>
+                                                        <td className="text-center">{index + 1}</td>
                                                         <td>
                                                             <strong>{history.bmr_name}</strong>
                                                         </td>
@@ -5302,14 +5626,9 @@ function BMR({
                                                         </td>
                                                         <td>{history.product_name}</td>
                                                         <td>{history.assembly_name}</td>
-                                                        <td>
-                                                            <span className="badge bg-info">
+                                                        <td className="text-center">
+                                                            <span className="badge bg-primary">
                                                                 {history.template_data?.length || 0}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <span className="badge bg-warning">
-                                                                {history.processes_data?.length || 0}
                                                             </span>
                                                         </td>
                                                         <td>
@@ -5320,23 +5639,23 @@ function BMR({
                                                                 <button
                                                                     className="btn btn-outline-primary"
                                                                     onClick={() => viewHistoryItem(history)}
+                                                                    title="View Details"
                                                                 >
                                                                     <i className="fa-solid fa-eye me-1"></i>
-                                                                    View
                                                                 </button>
                                                                 <button
                                                                     className="btn btn-outline-success"
                                                                     onClick={() => printHistoryItem(history)}
+                                                                    title="Print"
                                                                 >
                                                                     <i className="fa-solid fa-print me-1"></i>
-                                                                    Print
                                                                 </button>
                                                                 <button
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => deleteHistoryItem(history.id)}
+                                                                    title="Delete"
                                                                 >
                                                                     <i className="fa-solid fa-trash me-1"></i>
-                                                                    Delete
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -5363,16 +5682,17 @@ function BMR({
 
             {/* History Item Detail Modal */}
             {selectedHistoryItem && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}}>
                     <div className="modal-dialog modal-xl">
-                        <div className="modal-content">
-                            <div className="modal-header">
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-info text-white">
                                 <h5 className="modal-title">
+                                    <i className="fa-solid fa-file-invoice me-2"></i>
                                     History Details - {selectedHistoryItem.bmr_name}
                                 </h5>
                                 <button 
                                     type="button" 
-                                    className="btn-close" 
+                                    className="btn-close btn-close-white" 
                                     onClick={() => setSelectedHistoryItem(null)}
                                 ></button>
                             </div>
@@ -5397,13 +5717,13 @@ function BMR({
                                 <h5>Template Data</h5>
                                 {selectedHistoryItem.template_data?.length > 0 ? (
                                     <div className="table-responsive">
-                                        <table className="table table-striped table-bordered">
-                                            <thead>
+                                        <table className="table bmr-table table-hover">
+                                            <thead className="table-light">
                                                 <tr>
                                                     <th>#</th>
                                                     <th>Raw Material</th>
                                                     <th>Part No</th>
-                                                    <th>Internal S/N</th>
+                                                    <th>Internal Serial No</th>
                                                     <th>Description</th>
                                                     <th>Qty</th>
                                                     <th>Price</th>
@@ -5417,16 +5737,16 @@ function BMR({
                                                     const total = (parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 1);
                                                     return (
                                                         <tr key={index}>
-                                                            <td>{index + 1}</td>
+                                                            <td className="text-center">{index + 1}</td>
                                                             <td>{item.rawMaterial || ''}</td>
                                                             <td>{item.partNo || ''}</td>
                                                             <td>{item.internalSerialNo || ''}</td>
                                                             <td>{item.description || ''}</td>
-                                                            <td>{parseFloat(item.quantity || 1).toFixed(2)}</td>
-                                                            <td>₹{parseFloat(item.price || 0).toFixed(2)}</td>
-                                                            <td>₹{total.toFixed(2)}</td>
-                                                            <td>{item.issuedBy || ''}</td>
-                                                            <td>{item.receivedBy || ''}</td>
+                                                            <td className="text-center">{parseFloat(item.quantity || 1).toFixed(2)}</td>
+                                                            <td className="text-end">₹{parseFloat(item.price || 0).toFixed(2)}</td>
+                                                            <td className="text-end fw-bold text-success">₹{total.toFixed(2)}</td>
+                                                            <td>{item.issuedBy || 'N/A'}</td>
+                                                            <td>{item.receivedBy || 'N/A'}</td>
                                                         </tr>
                                                     );
                                                 })}
@@ -5443,54 +5763,26 @@ function BMR({
                                     <>
                                         <h5 className="mt-4">Process Details</h5>
                                         <div className="table-responsive">
-                                            <table className="table table-striped table-bordered">
-                                                <thead>
+                                            <table className="table bmr-table table-hover">
+                                                <thead className="table-light">
                                                     <tr>
                                                         <th>Process Name</th>
-                                                        <th>Handler(s)</th>
-                                                        <th>Status</th>
-                                                        <th>Total Time</th>
                                                         <th>Total Cost (₹)</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {selectedHistoryItem.processes_data.map((process, index) => {
-                                                        const handlers = process.handlers || [];
-                                                        const hasMultipleHandlers = handlers.length > 0;
-                                                        
-                                                        let totalProcessTime = 0;
-                                                        let totalProcessCost = 0;
-                                                        
-                                                        if (hasMultipleHandlers) {
-                                                            handlers.forEach(handler => {
-                                                                totalProcessTime += handler.elapsedTime || 0;
-                                                                totalProcessCost += (handler.amount || 0) * ((handler.elapsedTime || 0) / 60000);
-                                                            });
+                                                        let totalCost = 0;
+                                                        if (process.handlers && process.handlers.length > 0) {
+                                                            totalCost = process.handlers.reduce((hSum, handler) => 
+                                                                hSum + ((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)), 0);
                                                         } else {
-                                                            totalProcessTime = process.elapsedTime || 0;
-                                                            totalProcessCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
+                                                            totalCost = (process.amount || 0) * ((process.elapsedTime || 0) / 60000);
                                                         }
-                                                        
                                                         return (
                                                             <tr key={index}>
                                                                 <td><strong>{process.name}</strong></td>
-                                                                <td>
-                                                                    {hasMultipleHandlers ? 
-                                                                        handlers.map((handler, idx) => `
-                                                                            <div class="handler-row">
-                                                                                <strong>${handler.name}</strong> 
-                                                                                (₹${handler.amount}/min)<br/>
-                                                                                Time: ${formatTime(handler.elapsedTime || 0)} | 
-                                                                                Cost: ₹${((handler.amount || 0) * ((handler.elapsedTime || 0) / 60000)).toFixed(2)} |
-                                                                                Status: ${handler.status || 'initiate'}
-                                                                            </div>
-                                                                        `).join('') :
-                                                                        (process.handler || 'N/A')
-                                                                    }
-                                                                </td>
-                                                                <td>{process.status}</td>
-                                                                <td>{formatTime(totalProcessTime)}</td>
-                                                                <td>₹{totalProcessCost.toFixed(2)}</td>
+                                                                <td className="text-end fw-bold text-success">₹{totalCost.toFixed(2)}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -5523,12 +5815,15 @@ function BMR({
 
             {/* Completion Modal with decimal support */}
             {showCompletionModal && (
-                <div className="modal fade show" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
+                <div className="modal fade show bmr-modal" style={{display: 'block', backgroundColor: 'rgba(0,0,0,0.5)'}} tabIndex="-1">
                     <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h5 className="modal-title">Complete BMR - {completedBMR?.name}</h5>
-                                <button type="button" className="btn-close" onClick={() => setShowCompletionModal(false)}></button>
+                        <div className="modal-content shadow-lg">
+                            <div className="modal-header bg-success text-white">
+                                <h5 className="modal-title">
+                                    <i className="fa-solid fa-check-circle me-2"></i>
+                                    Complete BMR - {completedBMR?.name}
+                                </h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowCompletionModal(false)}></button>
                             </div>
                             <div className="modal-body">
                                 <div className="alert alert-success">
@@ -5592,7 +5887,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="BareCode"
                                                 value={newCompletedProduct.BareCode}
                                                 onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, BareCode: e.target.value }))}
@@ -5604,7 +5899,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="PartNo"
                                                 value={newCompletedProduct.PartNo}
                                                 onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, PartNo: e.target.value }))}
@@ -5616,7 +5911,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="LotNo"
                                                 value={newCompletedProduct.LotNo}
                                                 onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, LotNo: e.target.value }))}
@@ -5628,7 +5923,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="S.No"
                                                 value={newCompletedProduct.SNo}
                                                 onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, SNo: e.target.value }))}
@@ -5640,7 +5935,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control"
+                                                className="form-control bmr-form-control"
                                                 placeholder="Product Name"
                                                 value={newCompletedProduct.name}
                                                 onChange={(e) => setNewCompletedProduct(prev => ({ ...prev, name: e.target.value }))}
@@ -5652,7 +5947,7 @@ function BMR({
                                         <div className="form-floating mb-3">
                                             <input
                                                 type="text"
-                                                className="form-control decimal-input"
+                                                className="form-control bmr-form-control"
                                                 placeholder="Quantity"
                                                 value={newCompletedProduct.Quantity}
                                                 onChange={(e) => {
@@ -5703,16 +5998,16 @@ function BMR({
             {/* Edit Product Modal */}
             <div className="modal fade" id="editProductModal" tabIndex="-1" aria-labelledby="editProductModalLabel" aria-hidden="true">
                 <div className="modal-dialog">
-                    <div className="modal-content">
-                        <div className="modal-header">
+                    <div className="modal-content bmr-modal">
+                        <div className="modal-header bg-primary text-white">
                             <h5 className="modal-title" id="editProductModalLabel">Edit Product</h5>
-                            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-floating mb-3">
                                 <input
                                     type="text"
-                                    className="form-control"
+                                    className="form-control bmr-form-control"
                                     placeholder="Product Name"
                                     value={newProductName}
                                     onChange={(e) => setNewProductName(e.target.value)}
@@ -5731,16 +6026,16 @@ function BMR({
             {/* Edit Assembly Modal */}
             <div className="modal fade" id="editAssemblyModal" tabIndex="-1" aria-labelledby="editAssemblyModalLabel" aria-hidden="true">
                 <div className="modal-dialog">
-                    <div className="modal-content">
-                        <div className="modal-header">
+                    <div className="modal-content bmr-modal">
+                        <div className="modal-header bg-primary text-white">
                             <h5 className="modal-title" id="editAssemblyModalLabel">Edit Assembly</h5>
-                            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-floating mb-3">
                                 <input
                                     type="text"
-                                    className="form-control"
+                                    className="form-control bmr-form-control"
                                     placeholder="Assembly Name"
                                     value={newAssemblyName}
                                     onChange={(e) => setNewAssemblyName(e.target.value)}
@@ -5759,16 +6054,16 @@ function BMR({
             {/* Edit BMR Modal */}
             <div className="modal fade" id="editBMRModal" tabIndex="-1" aria-labelledby="editBMRModalLabel" aria-hidden="true">
                 <div className="modal-dialog">
-                    <div className="modal-content">
-                        <div className="modal-header">
+                    <div className="modal-content bmr-modal">
+                        <div className="modal-header bg-primary text-white">
                             <h5 className="modal-title" id="editBMRModalLabel">Edit BMR</h5>
-                            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div className="modal-body">
                             <div className="form-floating mb-3">
                                 <input
                                     type="text"
-                                    className="form-control"
+                                    className="form-control bmr-form-control"
                                     placeholder="BMR Name"
                                     value={newBMR.name}
                                     onChange={(e) => setNewBMR(prev => ({ ...prev, name: e.target.value }))}
@@ -5778,7 +6073,7 @@ function BMR({
                             <div className="form-floating mb-3">
                                 <input
                                     type="text"
-                                    className="form-control"
+                                    className="form-control bmr-form-control"
                                     placeholder="Initial Code"
                                     value={newBMR.initialCode}
                                     onChange={(e) => setNewBMR(prev => ({ ...prev, initialCode: e.target.value }))}
@@ -5787,7 +6082,7 @@ function BMR({
                             </div>
                             <div className="form-floating mb-3">
                                 <select
-                                    className="form-select"
+                                    className="form-select bmr-form-control"
                                     value={newBMR.type}
                                     onChange={(e) => setNewBMR(prev => ({ ...prev, type: e.target.value }))}
                                 >
@@ -5799,7 +6094,7 @@ function BMR({
                             </div>
                             <div className="form-floating mb-3">
                                 <select
-                                    className="form-select"
+                                    className="form-select bmr-form-control"
                                     value={newBMR.status}
                                     onChange={(e) => setNewBMR(prev => ({ ...prev, status: e.target.value }))}
                                 >

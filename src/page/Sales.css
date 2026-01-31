@@ -1,4 +1,398 @@
-.Sales-head{
+/* Sales.css */
+
+/* Main Container */
+.sales-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+/* Stats Cards */
+.dashboard-card {
+    transition: all 0.3s ease;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+}
+
+.dashboard-card .card-title {
+    font-size: 2rem;
+    color: #2c3e50;
+}
+
+.dashboard-card .card-subtitle {
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+}
+
+.dashboard-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+}
+
+/* Search Bar */
+.input-group-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.input-group .form-control {
+    border: 1px solid #dee2e6;
+    font-size: 1rem;
+}
+
+.input-group .form-control:focus {
+    box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+    border-color: #667eea;
+}
+
+/* Tables */
+.table {
+    margin-bottom: 0;
+    
+}
+
+.table thead th {
+   /* background: linear-gradient(135deg, #1049d9 0%, #14346b 100%);*/
+    color: rgb(25, 24, 24);
+    border: none;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 15px 12px;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(102, 126, 234, 0.05);
+    transform: scale(1.002);
+}
+
+.table-hover tbody tr:hover td {
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+/* Badges */
+.badge {
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+/* Form Controls */
+.form-control-lg {
+    border-radius: 10px;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s ease;
+}
+
+.form-control-lg:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.25);
+}
+
+.form-check-input {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.form-check-input:checked {
+    background-color: #667eea;
+    border-color: #667eea;
+}
+
+
+/* Modal */
+.modal-content {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    border-radius: 15px 15px 0 0;
+    padding: 20px 30px;
+}
+
+.modal-body {
+    padding: 30px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-footer {
+    padding: 20px 30px;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-card .card-title {
+        font-size: 1.5rem;
+    }
+    
+    .dashboard-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+    
+    .table-responsive {
+        border: none;
+    }
+    
+    .btn-lg {
+        padding: 10px 16px;
+        font-size: 1rem;
+    }
+    
+    .modal-dialog {
+        margin: 10px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+}
+
+@media (max-width: 576px) {
+    .sales-container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .table td, .table th {
+        padding: 8px 5px;
+        font-size: 0.85rem;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+    
+    .btn-group-sm > .btn {
+        padding: 3px 8px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.sales-container > .row {
+    animation: fadeIn 0.5s ease;
+}
+
+/* Scrollbar Styling */
+.modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #5a6fd8 0%, #6a4092 100%);
+}
+
+/* Table Stripes */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(102, 126, 234, 0.03);
+}
+
+/* Status Colors */
+.table-success {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.table-info {
+    background-color: rgba(23, 162, 184, 0.1) !important;
+}
+
+/* Form Labels */
+.form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.form-label.fw-bold {
+    color: #2c3e50;
+}
+
+/* Input Group */
+.input-group .btn-outline-secondary {
+    border-color: #dee2e6;
+}
+
+.input-group .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Quantity Controls */
+.quantity-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.quantity-controls .btn-sm {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Code Display */
+code {
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    color: #e83e8c;
+}
+
+/* Alert Messages */
+.alert {
+    border-radius: 10px;
+    border: none;
+    padding: 15px 20px;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #36d1dc 0%, #5b86e5 100%);
+    color: white;
+}
+
+/* Card Hover Effects */
+.card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Print Button Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .modal,
+    .modal-dialog,
+    .modal-content {
+        position: relative !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+    
+    .modal-header,
+    .modal-footer {
+        display: none !important;
+    }
+    
+    .modal-body {
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+}
+
+/* Custom Checkboxes */
+.form-check-input {
+    cursor: pointer;
+}
+
+.form-check-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Gradient Text */
+.gradient-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Tooltip Styles */
+[title] {
+    position: relative;
+}
+
+[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
 }

@@ -1,25 +1,353 @@
+.dashboard-container {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+}
 
+/* Header Styles */
+.dashboard-header {
+  margin-bottom: 2rem;
+}
 
+.dashboard-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-subtitle {
+  font-size: 1rem;
+  color: #7f8c8d;
+}
+
+/* Stats Cards */
+.stats-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+}
+
+.stats-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.bg-purple {
+  background-color: #6f42c1 !important;
+}
+
+.bg-purple-subtle {
+  background-color: rgba(111, 66, 193, 0.1) !important;
+}
+
+/* Chart Cards */
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.chart-card:hover {
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;
+}
+
+.chart-card .card-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.chart-card .card-body {
+  padding: 1.5rem;
+}
+
+/* Chart Legends */
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+/* Quick Actions */
+.quick-action-card {
+  transition: all 0.3s ease;
+  border-radius: 10px;
+  background: white;
+}
+
+.quick-action-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1) !important;
+  border-color: #4CAF50 !important;
+}
+
+.action-icon {
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.bg-purple {
+  background-color: #6f42c1 !important;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.hover-lift {
+  transition: transform 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* Activity Timeline */
+.activity-timeline {
+  position: relative;
+}
+
+.activity-item {
+  display: flex;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.activity-icon {
+  margin-right: 1rem;
+}
+
+.icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.activity-content {
+  flex: 1;
+  position: relative;
+}
+
+.activity-connector {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.75rem;
+  height: 1px;
+  background: linear-gradient(90deg, #e0e0e0, transparent);
+}
+
+/* Inventory Stats */
+.inventory-stat {
+  padding: 0.5rem;
+}
+
+.inventory-stat h6 {
+  font-weight: 600;
+}
+
+/* BMR Stats */
+.bmr-stat-card {
+  padding: 1rem;
+}
+
+.bmr-stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin: 0 auto;
+}
+
+/* Department Stats */
+.department-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.department-stat-item {
+  padding: 0.5rem 0;
+}
+
+/* Loading State */
+.dashboard-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.spinner-container {
+  text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 1rem;
+  }
+  
+  .dashboard-title {
+    font-size: 1.5rem;
+  }
+  
+  .stats-card {
+    margin-bottom: 1rem;
+  }
+  
+  .chart-card .card-body {
+    padding: 1rem;
+  }
+  
+  .quick-action-card {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .dashboard-header .row {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .dashboard-header .text-end {
+    text-align: center !important;
+    margin-top: 1rem;
+  }
+  
+  .time-range-selector {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Animation for cards */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stats-card, .chart-card, .quick-action-card {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Custom scrollbar for activity timeline */
+.activity-timeline {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.activity-timeline::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activity-timeline::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.activity-timeline::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.activity-timeline::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Metric items */
+.metric-item {
+  padding: 0.5rem;
+}
+
+.metric-item h4 {
+  font-weight: 700;
+}
+
+/* Tooltip enhancements */
+.custom-tooltip {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border: none !important;
+}
+
+/* Time range selector */
+.time-range-selector select {
+  border-radius: 20px;
+  border: 1px solid #dee2e6;
+  padding: 0.375rem 1rem;
+}
+
+/* Progress bar animation */
+.progress-bar {
+  transition: width 0.6s ease;
+}
+
+/* Button styles */
+.btn-outline-primary {
+  border-radius: 20px;
+  padding: 0.375rem 1rem;
+  border-width: 2px;
+}
+
+/* Card hover effects */
 .card {
-  border-radius: 15px;
-  transition: 0.3s ease;
+  transition: box-shadow 0.3s ease;
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.08) !important;
 }
 
-.card-body {
-  text-align: center;
-  padding: 20px;
-}
-
-.text-muted {
+/* Status badges */
+.badge {
   font-weight: 500;
+  padding: 0.35em 0.65em;
 }
 
-h2 {
-  font-family: "Poppins", sans-serif;
-  letter-spacing: 1px;
+/* Gradient backgrounds for different sections */
+.dashboard-footer .card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
 }

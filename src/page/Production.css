@@ -1,30 +1,213 @@
-.Header-add{
-    box-shadow: 0 0 5px 0 black;
-    display: flex;
-    flex-direction: column;
-    border-radius: 30px;
-    padding: 30px;
-}
-.Pro-buttons{
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-    flex-wrap: wrap;
-}
-.input-group{
-display: flex;
-justify-content: center;
+/* Production.css - Enhanced Styles */
 
+/* Department Buttons */
+.btn-department {
+  transition: all 0.3s ease;
+  min-width: 200px;
+  border-radius: 10px;
+  padding: 15px 20px;
+  margin: 5px;
+  border: 2px solid transparent;
 }
-.pinput{
-    margin-right: 900px;
+
+.btn-department:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
-.Status-Button{
-    margin: 0;
-    display: flex;
-    flex-direction: row;
+
+.btn-department.active {
+  border-color: #0d6efd;
+  background: linear-gradient(135deg, #0d6efd, #0b5ed7);
 }
-.serial{
-    display: flex;
-    gap: 10px;
+
+/* Table Hover Effects */
+.table-hover tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.05);
+  transform: scale(1.01);
+}
+
+/* Scanner Container */
+.scanner-container {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+}
+
+.scanner-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid #0d6efd;
+  border-radius: 10px;
+  animation: pulse 2s infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+/* Badge Enhancements */
+.badge {
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.badge.bg-primary {
+  background: linear-gradient(135deg, #0d6efd, #0b5ed7) !important;
+}
+
+.badge.bg-success {
+  background: linear-gradient(135deg, #198754, #157347) !important;
+}
+
+.badge.bg-info {
+  background: linear-gradient(135deg, #0dcaf0, #0ba5c7) !important;
+}
+
+/* Button Hover Effects */
+.btn-hover-shadow {
+  transition: all 0.3s ease;
+}
+
+.btn-hover-shadow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Form Control Focus */
+.form-control:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  transform: scale(1.02);
+}
+
+/* Modal Enhancements */
+.modal-content {
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.modal-header {
+  border-bottom: none;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .btn-department {
+    min-width: 150px;
+    padding: 12px 15px;
+    font-size: 0.9rem;
+  }
+  
+  .table-responsive {
+    font-size: 0.85rem;
+  }
+  
+  .modal-dialog {
+    margin: 10px;
+  }
+}
+
+/* Loading Animation */
+.spinner-border {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* Status Indicators */
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.status-active {
+  background-color: #198754;
+  animation: blink 2s infinite;
+}
+
+.status-inactive {
+  background-color: #dc3545;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Gradient Backgrounds */
+.bg-gradient {
+  background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+}
+
+/* Card Enhancements */
+.card {
+  border: none;
+  border-radius: 15px;
+}
+
+.card-header {
+  border-radius: 15px 15px 0 0 !important;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0d6efd;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0b5ed7;
+}
+
+/* Input Group Enhancements */
+.input-group-text {
+  background-color: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+/* Alert Customization */
+.alert {
+  border: none;
+  border-radius: 10px;
+  padding: 15px 20px;
+}
+
+/* Animation for new items */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.table tbody tr {
+  animation: fadeIn 0.3s ease-out;
 }
